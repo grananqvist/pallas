@@ -48,14 +48,16 @@ impl<'b> Decode<'b, ()> for Message {
             3 => Ok(Message::MsgQuery(MsgRequest::MsgRelease)),
             5 => Ok(Message::MsgQuery(MsgRequest::MsgNextTx)),
             6 => {
-                d.array()?;
-                let tag: Result<u8, pallas_codec::minicbor::decode::Error> = d.u8();
                 let mut tx = None;
+                if d.array().is_ok() {
+                    // Array should contain transaction, continue.
+                    let tag: Result<u8, pallas_codec::minicbor::decode::Error> = d.u8();
 
-                if tag.is_ok() {
-                    d.tag()?;
-                    let cbor = d.bytes()?;
-                    tx = Some(hex::encode(cbor));
+                    if tag.is_ok() {
+                        d.tag()?;
+                        let cbor = d.bytes()?;
+                        tx = Some(hex::encode(cbor));
+                    }
                 }
                 Ok(Message::MsgResponse(MsgResponse::MsgReplyNextTx(tx)))
             }
