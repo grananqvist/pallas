@@ -1,4 +1,4 @@
-use pallas_codec::minicbor::{decode, encode, Decode, Decoder, Encode, Encoder};
+use pallas_codec::minicbor::{decode, encode, Decode, Decoder, Encode, Encoder, data::Tag};
 
 use super::{
     protocol::{Message, TxIdAndSize},
@@ -71,6 +71,8 @@ impl<TxId: Encode<()>> Encode<()> for Message<TxId> {
                 e.array(2)?.u16(3)?;
                 e.begin_array()?;
                 for tx in txs {
+                    e.array(2)?.u16(5)?;
+                    e.tag(Tag::Cbor)?;
                     e.bytes(&tx.0)?;
                 }
                 e.end()?;
