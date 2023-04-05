@@ -74,9 +74,11 @@ where
         }
     }
 
-    pub fn send_message(&mut self, msg: &Message<TxId>) -> Result<(), Error> {
-        self.assert_agency_is_ours()?;
-        self.assert_outbound_state(msg)?;
+    pub fn send_message(&mut self, msg: &Message<TxId>, assert_state: bool) -> Result<(), Error> {
+        if assert_state {
+            self.assert_agency_is_ours()?;
+            self.assert_outbound_state(msg)?;
+        }
         self.1.send_msg_chunks(msg).map_err(Error::ChannelError)?;
 
         Ok(())
@@ -92,7 +94,7 @@ where
 
     pub fn send_init(&mut self) -> Result<(), Error> {
         let msg = Message::Init;
-        self.send_message(&msg)?;
+        self.send_message(&msg, true)?;
         self.0 = State::Idle;
 
         Ok(())
@@ -100,7 +102,7 @@ where
 
     pub fn reply_tx_ids(&mut self, ids: Vec<TxIdAndSize<TxId>>) -> Result<(), Error> {
         let msg = Message::ReplyTxIds(ids);
-        self.send_message(&msg)?;
+        self.send_message(&msg, true)?;
         self.0 = State::Idle;
 
         Ok(())
@@ -108,9 +110,14 @@ where
 
     pub fn reply_txs(&mut self, txs: Vec<TxBody>) -> Result<(), Error> {
         let msg = Message::ReplyTxs(txs);
-        self.send_message(&msg)?;
+        self.send_message(&msg, false)?;
         self.0 = State::Idle;
 
+        Ok(())
+    }
+
+    pub fn set_idle(&mut self) -> Result<(), Error> {
+        self.0 = State::Idle;
         Ok(())
     }
 
@@ -134,7 +141,7 @@ where
 
     pub fn send_done(&mut self) -> Result<(), Error> {
         let msg = Message::Done;
-        self.send_message(&msg)?;
+        self.send_message(&msg, true)?;
         self.0 = State::Done;
 
         Ok(())
