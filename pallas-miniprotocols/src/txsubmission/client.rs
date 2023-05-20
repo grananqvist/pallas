@@ -5,6 +5,7 @@ use pallas_multiplexer::agents::{Channel, ChannelBuffer};
 
 use super::protocol::{Error, Message, State, TxBody, TxIdAndSize};
 
+#[derive(Debug)]
 pub enum Request<TxId> {
     TxIds(u16, u16),
     TxIdsNonBlocking(u16, u16),
@@ -84,10 +85,14 @@ where
         Ok(())
     }
 
-    pub fn recv_message(&mut self) -> Result<Message<TxId>, Error> {
-        self.assert_agency_is_theirs()?;
+    pub fn recv_message(&mut self, assert_state: bool) -> Result<Message<TxId>, Error> {
+        if assert_state {
+            self.assert_agency_is_theirs()?;
+        }
         let msg = self.1.recv_full_msg().map_err(Error::ChannelError)?;
-        self.assert_inbound_state(&msg)?;
+        if assert_state {
+            self.assert_inbound_state(&msg)?;
+        }
 
         Ok(msg)
     }
@@ -121,8 +126,8 @@ where
         Ok(())
     }
 
-    pub fn next_request(&mut self) -> Result<Request<TxId>, Error> {
-        match self.recv_message()? {
+    pub fn next_request(&mut self, assert_state: bool) -> Result<Request<TxId>, Error> {
+        match self.recv_message(assert_state)? {
             Message::RequestTxIds(blocking, ack, req) => {
                 self.0 = State::TxIdsBlocking;
 
