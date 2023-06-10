@@ -81,11 +81,25 @@ impl<'b> Decode<'b, ()> for Message {
             4 => Ok(Message::AwaitAcquire),
             5 => Ok(Message::RequestNextTx),
             6 => match d.array()? {
+                /*
                 Some(_) => {
                     let cbor: pallas_codec::utils::CborWrap<Tx> = d.decode()?;
                     Ok(Message::ResponseNextTx(Some(cbor.unwrap())))
                 }
                 None => Ok(Message::ResponseNextTx(None)),
+                */
+                let mut tx = None;
+                if d.array().is_ok() {
+                    // Array should contain transaction, continue.
+                    let tag: Result<u8, pallas_codec::minicbor::decode::Error> = d.u8();
+
+                    if tag.is_ok() {
+                        d.tag()?;
+                        let cbor = d.bytes()?;
+                        tx = Some(hex::encode(cbor));
+                    }
+                }
+                Ok(Message::MsgResponse(MsgResponse::MsgReplyNextTx(tx)))
             },
             7 => {
                 let id = d.decode()?;

@@ -71,7 +71,10 @@ impl<TxId: Encode<()>, TxBody: Encode<()>> Encode<()> for Message<TxId, TxBody> 
                 e.array(2)?.u16(3)?;
                 e.begin_array()?;
                 for tx in txs {
-                    e.encode(tx)?;
+                    //e.encode(tx)?;
+                    e.array(2)?.u16(5)?;
+                    e.tag(Tag::Cbor)?;
+                    e.bytes(&tx.0)?;
                 }
                 e.end()?;
                 Ok(())
