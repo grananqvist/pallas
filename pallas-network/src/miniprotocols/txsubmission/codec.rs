@@ -104,9 +104,9 @@ impl Encode<()> for EraTxBody {
         e: &mut Encoder<W>,
         _ctx: &mut (),
     ) -> Result<(), encode::Error<W::Error>> {
-        e.array(2)?;
-        e.u16(self.0)?;
-        e.tag(Tag::Cbor)?;
+        //e.array(2)?;
+        //e.u16(self.0)?;
+        //e.tag(Tag::Cbor)?;
         e.bytes(&self.1)?;
         Ok(())
     }
