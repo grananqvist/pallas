@@ -4,6 +4,7 @@ use byteorder::{ByteOrder, NetworkEndian};
 use pallas_codec::{minicbor, Fragment};
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use tokio::net::{TcpListener, TcpStream, ToSocketAddrs, UnixStream};
@@ -136,7 +137,7 @@ pub enum Error {
     PlexerMux,
 }
 
-pub struct SegmentBuffer(Bearer, Vec<u8>);
+pub struct SegmentBuffer(pub Bearer, Vec<u8>);
 
 impl SegmentBuffer {
     pub fn new(bearer: Bearer) -> Self {
@@ -360,6 +361,35 @@ impl Plexer {
                     error!("something else happened");
                 }
             }
+        }
+    }
+
+    pub async fn run_with_stop(&mut self, keep_running: Arc<std::sync::atomic::AtomicBool>) -> Result<(), Error> {
+        while keep_running.load(std::sync::atomic::Ordering::SeqCst) {
+            trace!("selecting");
+            select! {
+                res = self.bearer.read_segment() => {
+                    let x = res?;
+                    trace!("demux selected");
+                    self.demux(x.0, x.1).await?
+                },
+                Some(x) = self.ingress.1.recv() => {
+                    trace!("mux selected");
+                    self.mux(x).await?
+                },
+                _ = tokio::time::sleep(tokio::time::Duration::from_secs(5)) => {
+                    trace!("idle plexer");
+                }
+                else => {
+                    error!("something else happened");
+                }
+            }
+        }
+        if let Bearer::Tcp(ref mut stream) = &mut self.bearer.0 {
+            stream.shutdown().await.unwrap();
+            Err(Error::Decoding("Mux received shutdown signal".to_string()))
+        } else {
+            panic!("Need to support failing case when no tcp stream")
         }
     }
 }

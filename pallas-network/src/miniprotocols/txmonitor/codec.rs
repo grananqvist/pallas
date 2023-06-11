@@ -80,7 +80,8 @@ impl<'b> Decode<'b, ()> for Message {
             // find the specs
             4 => Ok(Message::AwaitAcquire),
             5 => Ok(Message::RequestNextTx),
-            6 => match d.array()? {
+            6 => {
+                let mut tx = None;
                 /*
                 Some(_) => {
                     let cbor: pallas_codec::utils::CborWrap<Tx> = d.decode()?;
@@ -88,7 +89,6 @@ impl<'b> Decode<'b, ()> for Message {
                 }
                 None => Ok(Message::ResponseNextTx(None)),
                 */
-                let mut tx = None;
                 if d.array().is_ok() {
                     // Array should contain transaction, continue.
                     let tag: Result<u8, pallas_codec::minicbor::decode::Error> = d.u8();
@@ -96,10 +96,10 @@ impl<'b> Decode<'b, ()> for Message {
                     if tag.is_ok() {
                         d.tag()?;
                         let cbor = d.bytes()?;
-                        tx = Some(hex::encode(cbor));
+                        tx = Some(cbor.to_vec());
                     }
                 }
-                Ok(Message::MsgResponse(MsgResponse::MsgReplyNextTx(tx)))
+                Ok(Message::ResponseNextTx(tx))
             },
             7 => {
                 let id = d.decode()?;
