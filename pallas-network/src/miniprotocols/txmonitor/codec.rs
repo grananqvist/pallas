@@ -98,8 +98,9 @@ impl<'b> Decode<'b, ()> for Message {
 
                     if tag.is_ok() {
                         d.tag()?;
-                        let cbor = d.bytes()?;
-                        tx = Some(hex::encode(cbor));
+                        //let cbor = d.bytes()?;
+                        //tx = Some(hex::encode(cbor));
+                        tx = Some(d.decode()?);
                     }
                 }
                 Ok(Message::ResponseNextTx(tx))

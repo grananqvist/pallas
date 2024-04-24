@@ -93,7 +93,7 @@ where
 
     pub async fn send_message(
         &mut self,
-        msg: &Message<TxId>,
+        msg: &Message<TxId, TxBody>,
         assert_state: bool,
     ) -> Result<(), Error> {
         if assert_state {
