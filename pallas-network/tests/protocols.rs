@@ -1192,7 +1192,7 @@ pub async fn txsubmission_server_and_client_happy_path_n2n() {
 
         // receive ids request from server
 
-        let (_, req) = match client_txsub.next_request().await.unwrap() {
+        let (_, req) = match client_txsub.next_request(true).await.unwrap() {
             txsubmission::Request::TxIdsNonBlocking(ack, req) => (ack, req),
             _ => panic!("unexpected message"),
         };
@@ -1215,7 +1215,7 @@ pub async fn txsubmission_server_and_client_happy_path_n2n() {
 
         // receive txs request from server
 
-        let ids = match client_txsub.next_request().await.unwrap() {
+        let ids = match client_txsub.next_request(true).await.unwrap() {
             txsubmission::Request::Txs(ids) => ids,
             _ => panic!("unexpected message"),
         };
@@ -1235,7 +1235,7 @@ pub async fn txsubmission_server_and_client_happy_path_n2n() {
 
         // receive tx ids request from server (blocking)
 
-        match client_txsub.next_request().await.unwrap() {
+        match client_txsub.next_request(true).await.unwrap() {
             txsubmission::Request::TxIds(_, _) => (),
             _ => panic!("unexpected message"),
         };
@@ -1278,7 +1278,7 @@ pub async fn txsubmission_submit_to_mainnet_peer_n2n() {
 
     // receive ids request from server
 
-    let ack = match client_txsub.next_request().await.unwrap() {
+    let ack = match client_txsub.next_request(true).await.unwrap() {
         txsubmission::Request::TxIds(ack, _) => {
             assert_eq!(*client_txsub.state(), txsubmission::State::TxIdsBlocking);
             ack
@@ -1308,7 +1308,7 @@ pub async fn txsubmission_submit_to_mainnet_peer_n2n() {
 
     // receive txs request from server
 
-    let ids = match client_txsub.next_request().await.unwrap() {
+    let ids = match client_txsub.next_request(true).await.unwrap() {
         txsubmission::Request::Txs(ids) => ids,
         _ => panic!("unexpected message"),
     };
@@ -1329,7 +1329,7 @@ pub async fn txsubmission_submit_to_mainnet_peer_n2n() {
 
     // server usually sends another request before processing/acknowledging our
     // previous response, so ack is 0. the ack comes in the next message.
-    match client_txsub.next_request().await.unwrap() {
+    match client_txsub.next_request(true).await.unwrap() {
         txsubmission::Request::TxIdsNonBlocking(_, _) => {
             assert_eq!(*client_txsub.state(), txsubmission::State::TxIdsNonBlocking);
         }
@@ -1338,7 +1338,7 @@ pub async fn txsubmission_submit_to_mainnet_peer_n2n() {
 
     client_txsub.reply_tx_ids(vec![]).await.unwrap();
 
-    let ack = match client_txsub.next_request().await.unwrap() {
+    let ack = match client_txsub.next_request(true).await.unwrap() {
         txsubmission::Request::TxIds(ack, _) => {
             assert_eq!(*client_txsub.state(), txsubmission::State::TxIdsBlocking);
 

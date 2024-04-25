@@ -36,7 +36,7 @@ pub enum NextResponse<CONTENT> {
     Await,
 }
 
-pub struct Client<O>(State, multiplexer::ChannelBuffer, PhantomData<O>)
+pub struct Client<O>(State, pub multiplexer::ChannelBuffer, PhantomData<O>)
 where
     Message<O>: Fragment;
 
