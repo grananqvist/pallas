@@ -106,7 +106,6 @@ impl Client {
         let msg = Message::KeepAlive(cookie);
         self.send_message(&msg).await?;
         self.0 = State::Server(cookie);
-        debug!("sent keepalive message with cookie {}", cookie);
 
         Ok(())
     }

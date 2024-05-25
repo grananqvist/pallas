@@ -553,7 +553,6 @@ impl ChannelBuffer {
             trace!("buffer has data from previous payload");
 
             if let Some(msg) = try_decode_message::<M>(&mut self.temp)? {
-                debug!("decoding done");
                 return Ok(msg);
             }
         }
@@ -563,7 +562,6 @@ impl ChannelBuffer {
             self.temp.extend(chunk);
 
             if let Some(msg) = try_decode_message::<M>(&mut self.temp)? {
-                debug!("decoding done");
                 return Ok(msg);
             }
 

@@ -99,7 +99,6 @@ impl Server {
     pub async fn recv_keepalive_request(&mut self) -> Result<(), ServerError> {
         match self.recv_message().await? {
             Message::KeepAlive(cookie) => {
-                debug!("received keepalive message with cookie {}", cookie);
                 self.0 = State::Server(cookie);
                 Ok(())
             }
