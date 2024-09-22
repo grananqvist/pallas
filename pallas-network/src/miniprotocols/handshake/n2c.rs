@@ -74,8 +74,24 @@ impl VersionTable {
         VersionTable { values }
     }
 
+    pub fn v13(network_magic: u64) -> VersionTable {
+        let values = vec![(PROTOCOL_V13, VersionData(network_magic, None))]
+            .into_iter()
+            .collect::<HashMap<u64, VersionData>>();
+
+        VersionTable { values }
+    }
+
     pub fn v15_with_query(network_magic: u64) -> VersionTable {
         let values = vec![(PROTOCOL_V15, VersionData(network_magic, Some(true)))]
+            .into_iter()
+            .collect::<HashMap<u64, VersionData>>();
+
+        VersionTable { values }
+    }
+
+    pub fn v16(network_magic: u64) -> VersionTable {
+        let values = vec![(PROTOCOL_V16, VersionData(network_magic, Some(false)))]
             .into_iter()
             .collect::<HashMap<u64, VersionData>>();
 

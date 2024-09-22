@@ -8,6 +8,7 @@ use super::{
     EraTxBody, EraTxId,
 };
 
+#[derive(Debug)]
 pub enum Request<TxId> {
     TxIds(u16, u16),
     TxIdsNonBlocking(u16, u16),
@@ -90,25 +91,38 @@ where
         }
     }
 
-    pub async fn send_message(&mut self, msg: &Message<TxId, TxBody>) -> Result<(), Error> {
-        self.assert_agency_is_ours()?;
-        self.assert_outbound_state(msg)?;
+    pub async fn send_message(
+        &mut self,
+        msg: &Message<TxId, TxBody>,
+        assert_state: bool,
+    ) -> Result<(), Error> {
+        if assert_state {
+            self.assert_agency_is_ours()?;
+            self.assert_outbound_state(msg)?;
+        }
         self.1.send_msg_chunks(msg).await.map_err(Error::Plexer)?;
 
         Ok(())
     }
 
-    pub async fn recv_message(&mut self) -> Result<Message<TxId, TxBody>, Error> {
-        self.assert_agency_is_theirs()?;
+    pub async fn recv_message(
+        &mut self,
+        assert_state: bool,
+    ) -> Result<Message<TxId, TxBody>, Error> {
+        if assert_state {
+            self.assert_agency_is_theirs()?;
+        }
         let msg = self.1.recv_full_msg().await.map_err(Error::Plexer)?;
-        self.assert_inbound_state(&msg)?;
+        if assert_state {
+            self.assert_inbound_state(&msg)?;
+        }
 
         Ok(msg)
     }
 
     pub async fn send_init(&mut self) -> Result<(), Error> {
         let msg = Message::Init;
-        self.send_message(&msg).await?;
+        self.send_message(&msg, true).await?;
         self.0 = State::Idle;
 
         Ok(())
@@ -116,7 +130,7 @@ where
 
     pub async fn reply_tx_ids(&mut self, ids: Vec<TxIdAndSize<TxId>>) -> Result<(), Error> {
         let msg = Message::ReplyTxIds(ids);
-        self.send_message(&msg).await?;
+        self.send_message(&msg, true).await?;
         self.0 = State::Idle;
 
         Ok(())
@@ -124,14 +138,19 @@ where
 
     pub async fn reply_txs(&mut self, txs: Vec<TxBody>) -> Result<(), Error> {
         let msg = Message::ReplyTxs(txs);
-        self.send_message(&msg).await?;
+        self.send_message(&msg, false).await?;
         self.0 = State::Idle;
 
         Ok(())
     }
 
-    pub async fn next_request(&mut self) -> Result<Request<TxId>, Error> {
-        match self.recv_message().await? {
+    pub fn set_idle(&mut self) -> Result<(), Error> {
+        self.0 = State::Idle;
+        Ok(())
+    }
+
+    pub async fn next_request(&mut self, assert_state: bool) -> Result<Request<TxId>, Error> {
+        match self.recv_message(assert_state).await? {
             Message::RequestTxIds(blocking, ack, req) => match blocking {
                 true => {
                     self.0 = State::TxIdsBlocking;
@@ -152,7 +171,7 @@ where
 
     pub async fn send_done(&mut self) -> Result<(), Error> {
         let msg = Message::Done;
-        self.send_message(&msg).await?;
+        self.send_message(&msg, true).await?;
         self.0 = State::Done;
 
         Ok(())

@@ -141,6 +141,55 @@ impl VersionTable {
 
         VersionTable { values }
     }
+
+    
+    pub fn v13_and_above_peer_sharing(network_magic: u64) -> VersionTable {
+        let values = vec![
+            (
+                PROTOCOL_V11,
+                VersionData::new(network_magic, false, Some(1), Some(false)),
+            ),
+            (
+                PROTOCOL_V12,
+                VersionData::new(network_magic, false, Some(1), Some(false)),
+            ),
+            (
+                PROTOCOL_V13,
+                VersionData::new(network_magic, false, Some(1), Some(false)),
+            ),
+        ]
+        .into_iter()
+        .collect::<HashMap<u64, VersionData>>();
+
+        VersionTable { values }
+    }
+
+    pub fn v9(network_magic: u64) -> VersionTable {
+        let values = vec![(
+            PROTOCOL_V9,
+            VersionData::new(network_magic, false, None, None),
+        )]
+        .into_iter()
+        .collect::<HashMap<u64, VersionData>>();
+
+        VersionTable { values }
+    }
+
+    pub fn v12(network_magic: u64) -> VersionTable {
+        let values = vec![(
+            PROTOCOL_V12,
+            VersionData::new(
+                network_magic,
+                true,
+                Some(PEER_SHARING_DISABLED),
+                Some(false),
+            ),
+        )]
+        .into_iter()
+        .collect::<HashMap<u64, VersionData>>();
+
+        VersionTable { values }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

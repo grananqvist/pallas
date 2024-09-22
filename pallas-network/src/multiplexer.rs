@@ -394,9 +394,9 @@ type ToPlexerPort = tokio::sync::mpsc::Sender<(Protocol, Payload)>;
 type FromPlexerPort = tokio::sync::mpsc::Receiver<Payload>;
 
 pub struct AgentChannel {
-    protocol: Protocol,
-    to_plexer: ToPlexerPort,
-    from_plexer: FromPlexerPort,
+    pub protocol: Protocol,
+    pub to_plexer: ToPlexerPort,
+    pub from_plexer: FromPlexerPort,
 }
 
 impl AgentChannel {
@@ -513,7 +513,7 @@ where
 
 /// A channel abstraction to hide the complexity of partial payloads
 pub struct ChannelBuffer {
-    channel: AgentChannel,
+    pub channel: AgentChannel,
     temp: Vec<u8>,
 }
 
@@ -553,7 +553,6 @@ impl ChannelBuffer {
             trace!("buffer has data from previous payload");
 
             if let Some(msg) = try_decode_message::<M>(&mut self.temp)? {
-                debug!("decoding done");
                 return Ok(msg);
             }
         }
@@ -563,7 +562,6 @@ impl ChannelBuffer {
             self.temp.extend(chunk);
 
             if let Some(msg) = try_decode_message::<M>(&mut self.temp)? {
-                debug!("decoding done");
                 return Ok(msg);
             }
 

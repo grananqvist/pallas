@@ -106,7 +106,6 @@ impl Client {
         let msg = Message::KeepAlive(cookie);
         self.send_message(&msg).await?;
         self.0 = State::Server(cookie);
-        debug!("sent keepalive message with cookie {}", cookie);
 
         Ok(())
     }
@@ -114,7 +113,6 @@ impl Client {
     pub async fn recv_keepalive_response(&mut self) -> Result<(), ClientError> {
         match self.recv_message().await? {
             Message::ResponseKeepAlive(cookie) => {
-                debug!("received keepalive response with cookie {}", cookie);
                 match self.state() {
                     State::Server(expected) if *expected == cookie => {
                         self.0 = State::Client;

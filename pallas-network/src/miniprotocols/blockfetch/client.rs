@@ -38,7 +38,7 @@ pub type HasBlocks = Option<()>;
 /// This struct is used to interact with the Cardano network and fetch blocks
 /// from a remote node. It handles the state transitions and message exchange
 /// required to communicate with the network using the BlockFetch mini-protocol.
-pub struct Client(State, multiplexer::ChannelBuffer);
+pub struct Client(State, pub multiplexer::ChannelBuffer);
 
 impl Client {
     /// Create a new BlockFetch client from a multiplexer agent channel.
