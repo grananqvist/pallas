@@ -127,7 +127,7 @@ impl PeerClient {
 
         let plexer = plexer.spawn();
 
-        let versions = handshake::n2n::VersionTable::v9(magic);
+        let versions = handshake::n2n::VersionTable::v12(magic);
 
         let handshake = handshake
             .handshake(versions)
