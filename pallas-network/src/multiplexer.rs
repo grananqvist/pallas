@@ -1,11 +1,13 @@
 //! A multiplexer of several mini-protocols through a single bearer
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use byteorder::{ByteOrder, NetworkEndian};
 use pallas_codec::{minicbor, Fragment};
 use thiserror::Error;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 use tokio::{select, sync::mpsc::error::SendError};
@@ -307,12 +309,13 @@ impl Demuxer {
         self.demux(protocol, payload).await
     }
 
-    pub async fn run(&mut self) -> Result<(), Error> {
-        loop {
+    pub async fn run(&mut self, keep_running: Arc<AtomicBool>) -> Result<(), Error> {
+        while keep_running.load(Ordering::SeqCst) {
             if let Err(err) = self.tick().await {
-                break Err(err);
+                return Err(err);
             }
         }
+        return Err(Error::AbortFailure);
     }
 }
 
@@ -381,12 +384,17 @@ impl Muxer {
         Ok(())
     }
 
-    pub async fn run(&mut self) -> Result<(), Error> {
-        loop {
+    pub async fn run(&mut self, keep_running: Arc<AtomicBool>) -> Result<(), Error> {
+        while keep_running.load(Ordering::SeqCst) {
             if let Err(err) = self.tick().await {
-                break Err(err);
+                return Err(err);
             }
         }
+        if let BearerWriteHalf::Tcp(ref mut stream) = self.0 {
+            stream.shutdown();
+        }
+
+        return Err(Error::AbortFailure);
     }
 }
 
@@ -437,14 +445,31 @@ impl AgentChannel {
 }
 
 pub struct RunningPlexer {
+    keep_running: Arc<AtomicBool>,
     demuxer: JoinHandle<Result<(), Error>>,
     muxer: JoinHandle<Result<(), Error>>,
 }
 
 impl RunningPlexer {
     pub async fn abort(self) {
-        self.demuxer.abort();
-        self.muxer.abort();
+        self.keep_running.store(false, Ordering::SeqCst);
+
+        match self.demuxer.await {
+            Err(e) => {
+                tracing::warn!("Error joining demuxer: {:?}", e);
+            }
+            Ok(o) => {
+                tracing::warn!("Shut down demuxer: {:?}", o);
+            }
+        }
+        match self.muxer.await {
+            Err(e) => {
+                tracing::warn!("Error joining demuxer: {:?}", e);
+            }
+            Ok(o) => {
+                tracing::warn!("Shut down demuxer: {:?}", o);
+            }
+        }
     }
 }
 
@@ -479,10 +504,17 @@ impl Plexer {
         let mut demuxer = self.demuxer;
         let mut muxer = self.muxer;
 
-        let demuxer = tokio::spawn(async move { demuxer.run().await });
-        let muxer = tokio::spawn(async move { muxer.run().await });
+        let keep_running = Arc::new(AtomicBool::new(true));
+        let keep_running_clone = Arc::clone(&keep_running);
+        let keep_running_clone2 = Arc::clone(&keep_running);
+        let demuxer = tokio::spawn(async move { demuxer.run(keep_running_clone).await });
+        let muxer = tokio::spawn(async move { muxer.run(keep_running_clone2).await });
 
-        RunningPlexer { demuxer, muxer }
+        RunningPlexer {
+            keep_running,
+            demuxer,
+            muxer,
+        }
     }
 }
 
