@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
 use tracing::{debug, error};
@@ -47,13 +49,17 @@ pub const DEFAULT_KEEP_ALIVE_INTERVAL_SEC: u64 = 20;
 pub type KeepAliveHandle = tokio::task::JoinHandle<Result<(), Error>>;
 
 pub enum KeepAliveLoop {
-    Client(keepalive::Client, Duration),
+    Client(keepalive::Client, Duration, Arc<AtomicBool>),
     Server(keepalive::Server),
 }
 
 impl KeepAliveLoop {
-    pub fn client(client: keepalive::Client, interval: Duration) -> Self {
-        Self::Client(client, interval)
+    pub fn client(
+        client: keepalive::Client,
+        interval: Duration,
+        keep_running: Arc<AtomicBool>,
+    ) -> Self {
+        Self::Client(client, interval, keep_running)
     }
 
     pub fn server(server: keepalive::Server) -> Self {
@@ -63,10 +69,11 @@ impl KeepAliveLoop {
     pub async fn run_client(
         mut client: keepalive::Client,
         interval: Duration,
+        keep_running: Arc<AtomicBool>,
     ) -> Result<(), Error> {
         let mut interval = tokio::time::interval(interval);
 
-        loop {
+        while keep_running.load(Ordering::SeqCst) {
             interval.tick().await;
             debug!("sending keepalive request");
 
@@ -75,6 +82,7 @@ impl KeepAliveLoop {
                 .await
                 .map_err(Error::KeepAliveClientLoop)?;
         }
+        Err(Error::IncompatibleVersion)
     }
 
     pub async fn run_server(mut server: keepalive::Server) -> Result<(), Error> {
@@ -90,8 +98,8 @@ impl KeepAliveLoop {
 
     pub fn spawn(self) -> KeepAliveHandle {
         match self {
-            KeepAliveLoop::Client(client, interval) => {
-                tokio::spawn(Self::run_client(client, interval))
+            KeepAliveLoop::Client(client, interval, keep_running) => {
+                tokio::spawn(Self::run_client(client, interval, keep_running))
             }
             KeepAliveLoop::Server(server) => tokio::spawn(Self::run_server(server)),
         }
@@ -100,6 +108,7 @@ impl KeepAliveLoop {
 
 /// Client of N2N Ouroboros
 pub struct PeerClient {
+    keep_running: Arc<AtomicBool>,
     pub plexer: RunningPlexer,
     pub keepalive: KeepAliveHandle,
     pub chainsync: chainsync::N2NClient,
@@ -139,13 +148,16 @@ impl PeerClient {
             return Err(Error::IncompatibleVersion);
         }
 
+        let keep_running = Arc::new(AtomicBool::new(true));
         let keepalive = KeepAliveLoop::client(
             keepalive,
             Duration::from_secs(DEFAULT_KEEP_ALIVE_INTERVAL_SEC),
+            Arc::clone(&keep_running),
         )
         .spawn();
 
         let client = Self {
+            keep_running,
             plexer,
             keepalive,
             chainsync: chainsync::Client::new(cs_channel),
@@ -178,6 +190,15 @@ impl PeerClient {
     }
 
     pub async fn abort(self) {
+        self.keep_running.store(false, Ordering::SeqCst);
+        match self.keepalive.await {
+            Err(e) => {
+                tracing::warn!("Error joining keepalive: {:?}", e);
+            }
+            Ok(o) => {
+                tracing::warn!("Shut down keepalive: {:?}", o);
+            }
+        }
         self.plexer.abort().await
     }
 }
