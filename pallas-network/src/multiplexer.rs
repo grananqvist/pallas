@@ -391,7 +391,7 @@ impl Muxer {
             }
         }
         if let BearerWriteHalf::Tcp(ref mut stream) = self.0 {
-            stream.shutdown();
+            stream.shutdown().await.unwrap();
         }
 
         return Err(Error::AbortFailure);
