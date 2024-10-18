@@ -108,7 +108,7 @@ impl KeepAliveLoop {
 
 /// Client of N2N Ouroboros
 pub struct PeerClient {
-    keep_running: Arc<AtomicBool>,
+    pub keep_running: Arc<AtomicBool>,
     pub plexer: RunningPlexer,
     pub keepalive: KeepAliveHandle,
     pub chainsync: chainsync::N2NClient,
