@@ -310,12 +310,23 @@ impl Demuxer {
     }
 
     pub async fn run(&mut self, keep_running: Arc<AtomicBool>) -> Result<(), Error> {
+        let timeout_duration = tokio::time::Duration::from_secs(5);
+
         while keep_running.load(Ordering::SeqCst) {
-            if let Err(err) = self.tick().await {
-                return Err(err);
+            match tokio::time::timeout(timeout_duration, self.tick()).await {
+                Ok(Ok(_)) => {
+                    // self.tick() completed successfully, continue the loop
+                }
+                Ok(Err(err)) => {
+                    return Err(err);
+                }
+                Err(_) => {
+                    // Timeout occurred, check keep_running
+                    trace!("muxer tick timeout");
+                }
             }
         }
-        return Err(Error::AbortFailure);
+        Err(Error::AbortFailure)
     }
 }
 
@@ -385,16 +396,32 @@ impl Muxer {
     }
 
     pub async fn run(&mut self, keep_running: Arc<AtomicBool>) -> Result<(), Error> {
+        let timeout_duration = tokio::time::Duration::from_secs(5);
+
         while keep_running.load(Ordering::SeqCst) {
-            if let Err(err) = self.tick().await {
-                return Err(err);
+            match tokio::time::timeout(timeout_duration, self.tick()).await {
+                Ok(Ok(_)) => {
+                    // self.tick() completed successfully, continue the loop
+                }
+                Ok(Err(err)) => {
+                    return Err(err);
+                }
+                Err(_) => {
+                    // Timeout occurred, check keep_running
+                    trace!("muxer tick timeout");
+                }
             }
         }
+
+        // Ensure the stream is shut down if the loop exits due to keep_running being false
         if let BearerWriteHalf::Tcp(ref mut stream) = self.0 {
-            stream.shutdown().await.unwrap();
+            match stream.shutdown().await {
+                Ok(_) => {}
+                Err(_) => {}
+            }
         }
 
-        return Err(Error::AbortFailure);
+        Err(Error::AbortFailure)
     }
 }
 
@@ -464,10 +491,10 @@ impl RunningPlexer {
         }
         match self.muxer.await {
             Err(e) => {
-                tracing::warn!("Error joining demuxer: {:?}", e);
+                tracing::warn!("Error joining muxer: {:?}", e);
             }
             Ok(o) => {
-                tracing::warn!("Shut down demuxer: {:?}", o);
+                tracing::warn!("Shut down muxer: {:?}", o);
             }
         }
     }
