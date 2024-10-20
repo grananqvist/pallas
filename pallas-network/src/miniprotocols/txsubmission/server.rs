@@ -42,6 +42,10 @@ where
         )
     }
 
+    pub fn reset(&mut self) {
+        self.0 = State::Init;
+    }
+
     pub fn state(&self) -> &State {
         &self.0
     }
