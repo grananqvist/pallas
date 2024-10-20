@@ -256,7 +256,7 @@ type Egress = HashMap<Protocol, EgressChannel>;
 
 const EGRESS_MSG_QUEUE_BUFFER: usize = 100;
 
-pub struct Demuxer(BearerReadHalf, Egress);
+pub struct Demuxer(BearerReadHalf, pub Egress);
 
 impl Demuxer {
     pub fn new(bearer: BearerReadHalf) -> Self {
@@ -304,9 +304,17 @@ impl Demuxer {
     }
 
     pub async fn tick(&mut self) -> Result<(), Error> {
-        let (protocol, payload) = self.read_segment().await?;
-        trace!(protocol, "demux happening");
-        self.demux(protocol, payload).await
+        match self.read_segment().await {
+            Ok((protocol, payload)) => {
+                trace!(protocol, "demux happening");
+                self.demux(protocol, payload).await
+            }
+            Err(err) => {
+                // Also remember to close all Egress channels if error
+                self.1.clear();
+                Err(err)
+            }
+        }
     }
 
     pub async fn run(&mut self, keep_running: Arc<AtomicBool>) -> Result<(), Error> {
