@@ -8,6 +8,7 @@ use super::{
 };
 use crate::multiplexer;
 
+#[derive(Debug)]
 pub enum Reply<TxId, TxBody> {
     TxIds(Vec<TxIdAndSize<TxId>>),
     Txs(Vec<TxBody>),

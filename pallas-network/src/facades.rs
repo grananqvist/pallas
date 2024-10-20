@@ -1,5 +1,7 @@
+use std::future::Future;
 use std::net::SocketAddr;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -13,6 +15,7 @@ use tokio::net::{unix::SocketAddr as UnixSocketAddr, UnixListener};
 
 use crate::miniprotocols::handshake::{n2c, n2n, Confirmation, VersionNumber};
 
+use crate::miniprotocols::keepalive::ClientError;
 use crate::miniprotocols::{
     blockfetch, chainsync, handshake, keepalive, localstate, localtxsubmission, txmonitor,
     txsubmission, PROTOCOL_N2C_CHAIN_SYNC, PROTOCOL_N2C_HANDSHAKE, PROTOCOL_N2C_STATE_QUERY,
@@ -66,6 +69,7 @@ impl KeepAliveLoop {
         Self::Server(server)
     }
 
+    /*
     pub async fn run_client(
         mut client: keepalive::Client,
         interval: Duration,
@@ -82,6 +86,48 @@ impl KeepAliveLoop {
                 .await
                 .map_err(Error::KeepAliveClientLoop)?;
         }
+        Err(Error::IncompatibleVersion)
+    }
+    */
+
+    pub async fn run_client(
+        mut client: keepalive::Client,
+        interval: Duration,
+        keep_running: Arc<AtomicBool>,
+    ) -> Result<(), Error> {
+        let mut interval = tokio::time::interval(interval);
+        let timeout_duration = tokio::time::Duration::from_secs(5);
+
+        while keep_running.load(Ordering::SeqCst) {
+            interval.tick().await;
+            debug!("sending keepalive request");
+
+            // Create a boxed future for the keepalive roundtrip
+            let mut keepalive_future: Pin<
+                Box<dyn Future<Output = Result<(), ClientError>> + Send>,
+            > = Box::pin(client.keepalive_roundtrip());
+
+            let mut finished = false;
+
+            while !finished && keep_running.load(Ordering::SeqCst) {
+                // Apply timeout to keepalive_roundtrip
+                match tokio::time::timeout(timeout_duration, &mut keepalive_future).await {
+                    Ok(Ok(())) => {
+                        // Keepalive roundtrip succeeded, continue loop
+                        finished = true;
+                    }
+                    Ok(Err(err)) => {
+                        // Error occurred in keepalive roundtrip
+                        return Err(Error::KeepAliveClientLoop(err));
+                    }
+                    Err(_) => {
+                        // Timeout occurred
+                        tracing::warn!("keepalive_roundtrip timed out");
+                    }
+                }
+            }
+        }
+
         Err(Error::IncompatibleVersion)
     }
 
