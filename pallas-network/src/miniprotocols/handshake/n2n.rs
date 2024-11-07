@@ -190,6 +190,22 @@ impl VersionTable {
 
         VersionTable { values }
     }
+
+    pub fn v13(network_magic: u64) -> VersionTable {
+        let values = vec![(
+            PROTOCOL_V13,
+            VersionData::new(
+                network_magic,
+                true,
+                Some(PEER_SHARING_DISABLED),
+                Some(false),
+            ),
+        )]
+        .into_iter()
+        .collect::<HashMap<u64, VersionData>>();
+
+        VersionTable { values }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
