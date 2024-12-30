@@ -54,6 +54,10 @@ where
         )
     }
 
+    pub fn reset(&mut self) {
+        self.0 = State::Idle;
+    }
+
     /// Returns the current state of the server.
     pub fn state(&self) -> &State {
         &self.0

@@ -49,8 +49,8 @@ async fn do_chainsync(
     mut blockfetch_client: blockfetch::Client,
 ) -> Result<(), Error> {
     let known_points = vec![Point::Specific(
-        43847831u64,
-        hex::decode("15b9eeee849dd6386d3770b0745e0450190f7560e5159b1b3ab13b14b2684a45")?,
+        143972014u64,
+        hex::decode("08a63ac44512f5feca525bde4a71026b11337879285fd0b992cd4e86d1de1daa")?,
     )];
 
     let (point, _) = chainsync_client.find_intersect(known_points).await?;
@@ -62,10 +62,10 @@ async fn do_chainsync(
     let mut end_point: Point;
     let mut next_log = Instant::now();
     loop {
-        let next = chainsync_client.request_next().await?;
+        let next = chainsync_client.request_or_await_next().await?;
 
         match next {
-            chainsync::NextResponse::RollForward(h, _) => {
+            chainsync::NextResponse::RollForward(h, t) => {
                 tracing::trace!("rolling forward, header size: {}", h.cbor.len());
                 let point = match h.byron_prefix {
                     None => {
@@ -81,7 +81,7 @@ async fn do_chainsync(
                             MultiEraHeader::ShelleyCompatible(_)
                             | MultiEraHeader::BabbageCompatible(_) => {
                                 if next_log.elapsed().as_secs() > 1 {
-                                    tracing::info!("chainsync block header: {}", number);
+                                    tracing::info!("chainsync block header: {}, tip: {:?}", number, t);
                                     next_log = Instant::now();
                                 }
                                 Some(Point::Specific(slot, hash))
@@ -130,7 +130,8 @@ async fn main() {
     loop {
         // setup a TCP socket to act as data bearer between our agents and the remote
         // relay.
-        let server = "backbone.cardano-mainnet.iohk.io:3001";
+        let server = "127.0.0.1:6001";
+
         // let server = "localhost:6000";
         let peer = PeerClient::connect(server, MAINNET_MAGIC).await.unwrap();
 

@@ -67,7 +67,7 @@ pub const PROTOCOL_N2C_STATE_QUERY: u16 = 7;
 pub const PROTOCOL_N2C_TX_MONITOR: u16 = 9;
 
 /// A point within a chain
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Ord)]
 pub enum Point {
     Origin,
     Specific(u64, Vec<u8>),
@@ -78,6 +78,17 @@ impl Point {
         match self {
             Point::Origin => 0,
             Point::Specific(slot, _) => *slot,
+        }
+    }
+}
+
+impl PartialOrd for Point {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match (self, other) {
+            (Point::Origin, Point::Origin) => Some(std::cmp::Ordering::Equal),
+            (Point::Origin, Point::Specific(_, _)) => Some(std::cmp::Ordering::Less),
+            (Point::Specific(_, _), Point::Origin) => Some(std::cmp::Ordering::Greater),
+            (Point::Specific(slot1, _), Point::Specific(slot2, _)) => slot1.partial_cmp(slot2),
         }
     }
 }

@@ -39,6 +39,10 @@ impl Server {
         Self(State::Idle, multiplexer::ChannelBuffer::new(channel))
     }
 
+    pub fn reset(&mut self) {
+        self.0 = State::Idle;
+    }
+
     /// Get the current state of the server.
     ///
     /// Returns the current state of the server.

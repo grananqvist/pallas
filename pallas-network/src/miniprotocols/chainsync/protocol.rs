@@ -29,14 +29,14 @@ pub enum Message<C> {
     Done,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct HeaderContent {
     pub variant: u8,
     pub byron_prefix: Option<(u8, u64)>,
     pub cbor: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockContent(pub Vec<u8>);
 
 impl Deref for BlockContent {
