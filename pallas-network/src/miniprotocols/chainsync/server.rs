@@ -58,6 +58,10 @@ where
         self.0 = State::Idle;
     }
 
+    pub fn set_state(&mut self, state: State) {
+        self.0 = state;
+    }
+
     /// Returns the current state of the server.
     pub fn state(&self) -> &State {
         &self.0

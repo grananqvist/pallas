@@ -82,6 +82,15 @@ impl Point {
     }
 }
 
+impl Point {
+    pub fn hash(&self) -> Option<Vec<u8>> {
+        match self {
+            Point::Origin => None,
+            Point::Specific(_, hash) => Some(hash.clone()),
+        }
+    }
+}
+
 impl PartialOrd for Point {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         match (self, other) {
