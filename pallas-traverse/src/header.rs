@@ -78,6 +78,15 @@ impl<'b> MultiEraHeader<'b> {
         }
     }
 
+    pub fn existing_hash(&self) -> Hash<32> {
+        match self {
+            MultiEraHeader::EpochBoundary(x) => x.body_proof,
+            MultiEraHeader::ShelleyCompatible(x) => x.header_body.block_body_hash,
+            MultiEraHeader::BabbageCompatible(x) => x.header_body.block_body_hash,
+            MultiEraHeader::Byron(x) => x.body_proof.dlg_proof,
+        }
+    }
+
     pub fn previous_hash(&self) -> Option<Hash<32>> {
         match self {
             MultiEraHeader::ShelleyCompatible(x) => x.header_body.prev_hash,
