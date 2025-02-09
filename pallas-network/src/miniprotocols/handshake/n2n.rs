@@ -11,6 +11,7 @@ const PROTOCOL_V10: u64 = 10;
 const PROTOCOL_V11: u64 = 11;
 const PROTOCOL_V12: u64 = 12;
 const PROTOCOL_V13: u64 = 13;
+const PROTOCOL_V14: u64 = 14;
 
 const PEER_SHARING_DISABLED: u8 = 0;
 
@@ -157,6 +158,10 @@ impl VersionTable {
                 PROTOCOL_V13,
                 VersionData::new(network_magic, false, Some(1), Some(false)),
             ),
+            (
+                PROTOCOL_V14,
+                VersionData::new(network_magic, false, Some(1), Some(false)),
+            ),
         ]
         .into_iter()
         .collect::<HashMap<u64, VersionData>>();
@@ -206,13 +211,29 @@ impl VersionTable {
 
         VersionTable { values }
     }
+
+    pub fn v14(network_magic: u64) -> VersionTable {
+        let values = vec![(
+            PROTOCOL_V14,
+            VersionData::new(
+                network_magic,
+                true,
+                Some(PEER_SHARING_DISABLED),
+                Some(false),
+            ),
+        )]
+        .into_iter()
+        .collect::<HashMap<u64, VersionData>>();
+
+        VersionTable { values }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct VersionData {
     network_magic: u64,
     initiator_only_diffusion_mode: bool,
-    peer_sharing: Option<u8>,
+    pub peer_sharing: Option<u8>,
     query: Option<bool>,
 }
 
