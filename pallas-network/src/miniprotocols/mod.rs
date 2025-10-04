@@ -6,8 +6,11 @@ pub mod blockfetch;
 pub mod chainsync;
 pub mod handshake;
 pub mod keepalive;
+pub mod localmsgnotification;
+pub mod localmsgsubmission;
 pub mod localstate;
 pub mod localtxsubmission;
+pub mod peersharing;
 pub mod txmonitor;
 pub mod txsubmission;
 

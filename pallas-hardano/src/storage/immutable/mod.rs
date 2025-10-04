@@ -565,12 +565,13 @@ mod tests {
     }
 
     fn read_full_snapshot(path: &Path) {
-        let reader = super::read_blocks(&path).unwrap();
+        let reader = super::read_blocks(path).unwrap();
 
         let mut count = 0;
         let mut last_slot = None;
         let mut last_height = None;
         let mut last_hash = None;
+        let mut last_was_boundary = false;
 
         for block in reader.take_while(Result::is_ok) {
             let block = block.unwrap();
@@ -579,11 +580,21 @@ mod tests {
             trace!("{}", block.hash());
 
             if let Some(last_slot) = last_slot {
-                assert!(last_slot < block.slot());
+                if last_was_boundary {
+                    assert!(last_slot <= block.slot());
+                } else {
+                    assert!(last_slot < block.slot());
+                }
             }
 
+            last_was_boundary = matches!(block, MultiEraBlock::EpochBoundary(_));
+
             if let Some(last_height) = last_height {
-                assert_eq!(last_height + 1, block.number());
+                if last_was_boundary {
+                    assert!(last_height <= block.number() && block.number() <= last_height + 1);
+                } else {
+                    assert_eq!(last_height + 1, block.number());
+                }
             }
 
             if let Some(last_hash) = last_hash {

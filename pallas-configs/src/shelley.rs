@@ -1,6 +1,6 @@
-use num_rational::BigRational;
+use num_rational::Rational64;
 use pallas_crypto::hash::Hash;
-use pallas_primitives::conway::RationalNumber;
+use pallas_primitives::conway::{Epoch, RationalNumber};
 use serde::{Deserialize, Deserializer};
 use std::{collections::HashMap, str::FromStr};
 
@@ -11,18 +11,18 @@ where
     D: Deserializer<'de>,
 {
     let s = f32::deserialize(deserializer)?;
-    let r = BigRational::from_float(s)
+    let r = Rational64::approximate_float(s)
         .ok_or(serde::de::Error::custom("can't turn float into rational"))?;
 
     let r = pallas_primitives::alonzo::RationalNumber {
-        numerator: r.numer().try_into().map_err(serde::de::Error::custom)?,
-        denominator: r.denom().try_into().map_err(serde::de::Error::custom)?,
+        numerator: *r.numer() as u64,
+        denominator: *r.denom() as u64,
     };
 
     Ok(r)
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GenDelegs {
     pub delegate: Option<String>,
@@ -75,7 +75,7 @@ impl From<ExtraEntropy> for pallas_primitives::alonzo::Nonce {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ProtocolParams {
     pub protocol_version: ProtocolVersion,
@@ -90,7 +90,7 @@ pub struct ProtocolParams {
     pub pool_deposit: u64,
     pub n_opt: u32,
     pub min_pool_cost: u64,
-    pub e_max: u32,
+    pub e_max: Epoch,
     pub extra_entropy: ExtraEntropy,
 
     #[serde(deserialize_with = "deserialize_rational")]
@@ -106,31 +106,101 @@ pub struct ProtocolParams {
     pub a0: pallas_primitives::alonzo::RationalNumber,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Metadata {
+    pub hash: String,
+    pub url: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SingleHostAddr {
+    pub port: Option<u32>,
+    #[serde(rename = "IPv6")]
+    pub ipv6: Option<String>,
+    #[serde(rename = "IPv4")]
+    pub ipv4: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct SingleHostName {
+    pub port: Option<u32>,
+    pub dns_name: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MultiHostName {
+    pub dns_name: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", untagged)]
+pub enum Relay {
+    SingleHostAddr(SingleHostAddr),
+    SingleHostName(SingleHostName),
+    MultiHostName(MultiHostName),
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub enum Credential {
+    KeyHash(String),
+    ScriptHash(String),
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct RewardAccount {
+    pub credential: Credential,
+    pub network: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Pool {
+    pub cost: u64,
+    #[serde(deserialize_with = "deserialize_rational")]
+    pub margin: pallas_primitives::alonzo::RationalNumber,
+    pub metadata: Option<Metadata>,
+    pub owners: Vec<String>,
+    pub pledge: u64,
+    pub public_key: String, // pool ID
+    pub relays: Vec<HashMap<String, Relay>>,
+    pub reward_account: RewardAccount,
+    pub vrf: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Staking {
-    pub pools: Option<HashMap<String, String>>,
+    pub pools: Option<HashMap<String, Pool>>,
     pub stake: Option<HashMap<String, String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct GenesisFile {
     pub active_slots_coeff: Option<f32>,
     pub epoch_length: Option<u32>,
     pub gen_delegs: Option<HashMap<String, GenDelegs>>,
-    pub initial_funds: Option<HashMap<String, String>>,
-    pub max_kes_evolutions: Option<u32>,
+    pub initial_funds: Option<HashMap<String, u64>>,
     pub max_lovelace_supply: Option<u64>,
     pub network_id: Option<String>,
     pub network_magic: Option<u32>,
     pub protocol_params: ProtocolParams,
     pub security_param: Option<u32>,
     pub slot_length: Option<u32>,
-    pub slots_per_kes_period: Option<u32>,
     pub staking: Option<Staking>,
     pub system_start: Option<String>,
     pub update_quorum: Option<u32>,
+
+    #[serde(rename = "maxKESEvolutions")]
+    pub max_kes_evolutions: Option<u32>,
+
+    #[serde(rename = "slotsPerKESPeriod")]
+    pub slots_per_kes_period: Option<u32>,
 }
 
 pub fn from_file(path: &std::path::Path) -> Result<GenesisFile, std::io::Error> {
@@ -139,6 +209,24 @@ pub fn from_file(path: &std::path::Path) -> Result<GenesisFile, std::io::Error> 
     let parsed: GenesisFile = serde_json::from_reader(reader)?;
 
     Ok(parsed)
+}
+
+pub type GenesisUtxo = (Hash<32>, pallas_addresses::Address, u64);
+
+pub fn shelley_utxos(config: &GenesisFile) -> Vec<GenesisUtxo> {
+    match &config.initial_funds {
+        None => Vec::new(),
+        Some(funds) => funds
+            .iter()
+            .map(|(addr, amount)| {
+                let addr = pallas_addresses::Address::from_hex(addr).unwrap();
+
+                let txid = pallas_crypto::hash::Hasher::<256>::hash(&addr.to_vec());
+
+                (txid, addr, *amount)
+            })
+            .collect(),
+    }
 }
 
 #[cfg(test)]
@@ -152,6 +240,22 @@ mod tests {
             .join(format!("{network}-shelley-genesis.json"));
 
         from_file(&path).unwrap()
+    }
+
+    #[test]
+    fn calc_address_txid() {
+        let config = load_test_data_config("golden");
+        let utxos = shelley_utxos(&config);
+        let utxo = utxos.first().unwrap();
+        assert_eq!(
+            utxo.0.to_string(),
+            "f9ec23569778d1c5f7f43e0e98464335f02fb98b57683faa1c6b18c82921d2da"
+        );
+        assert_eq!(
+            utxo.1.to_bech32().unwrap(),
+            "addr_test1qrsm4h32h9r95f8at64ykuugxqu3wvu0s5ay3vg6tlyevjh4e2flkegka00r69gt8c4vkxgf2vnnph3nsvhlkg5ukgxslee3tf"
+        );
+        assert_eq!(utxo.2, 12157196);
     }
 
     #[test]

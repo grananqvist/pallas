@@ -2,12 +2,12 @@
 
 use pallas_codec::utils::NonZeroInt;
 use pallas_codec::utils::PositiveCoin;
-use std::{borrow::Cow, fmt::Display, hash::Hash as StdHash};
+use std::{borrow::Cow, collections::BTreeMap, fmt::Display, hash::Hash as StdHash};
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use pallas_codec::utils::{KeepRaw, KeyValuePairs, NonEmptyKeyValuePairs};
+use pallas_codec::utils::KeepRaw;
 use pallas_crypto::hash::Hash;
 use pallas_primitives::{alonzo, babbage, byron, conway};
 
@@ -19,6 +19,7 @@ pub mod block;
 pub mod cert;
 pub mod era;
 pub mod fees;
+pub mod governance;
 pub mod hashes;
 pub mod header;
 pub mod input;
@@ -31,6 +32,7 @@ pub mod size;
 pub mod time;
 pub mod tx;
 pub mod update;
+pub mod value;
 pub mod withdrawals;
 pub mod witnesses;
 
@@ -73,28 +75,36 @@ pub enum MultiEraHeader<'b> {
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum MultiEraBlock<'b> {
-    EpochBoundary(Box<byron::MintedEbBlock<'b>>),
-    AlonzoCompatible(Box<alonzo::MintedBlock<'b>>, Era),
-    Babbage(Box<babbage::MintedBlock<'b>>),
-    Byron(Box<byron::MintedBlock<'b>>),
-    Conway(Box<conway::MintedBlock<'b>>),
+    EpochBoundary(Box<byron::EbBlock<'b>>),
+    AlonzoCompatible(Box<alonzo::Block<'b>>, Era),
+    Babbage(Box<babbage::Block<'b>>),
+    Byron(Box<byron::Block<'b>>),
+    Conway(Box<conway::Block<'b>>),
 }
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum MultiEraTx<'b> {
-    AlonzoCompatible(Box<Cow<'b, alonzo::MintedTx<'b>>>, Era),
-    Babbage(Box<Cow<'b, babbage::MintedTx<'b>>>),
-    Byron(Box<Cow<'b, byron::MintedTxPayload<'b>>>),
-    Conway(Box<Cow<'b, conway::MintedTx<'b>>>),
+    AlonzoCompatible(Box<Cow<'b, alonzo::Tx<'b>>>, Era),
+    Babbage(Box<Cow<'b, babbage::Tx<'b>>>),
+    Byron(Box<Cow<'b, byron::TxPayload<'b>>>),
+    Conway(Box<Cow<'b, conway::Tx<'b>>>),
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum MultiEraValue<'b> {
+    Byron(u64),
+    AlonzoCompatible(Cow<'b, alonzo::Value>),
+    Conway(Cow<'b, conway::Value>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum MultiEraOutput<'b> {
     AlonzoCompatible(Box<Cow<'b, alonzo::TransactionOutput>>, Era),
-    Babbage(Box<Cow<'b, babbage::MintedTransactionOutput<'b>>>),
-    Conway(Box<Cow<'b, conway::MintedTransactionOutput<'b>>>),
+    Babbage(Box<Cow<'b, babbage::TransactionOutput<'b>>>),
+    Conway(Box<Cow<'b, conway::TransactionOutput<'b>>>),
     Byron(Box<Cow<'b, byron::TxOut>>),
 }
 
@@ -135,21 +145,15 @@ pub enum MultiEraMeta<'b> {
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub enum MultiEraPolicyAssets<'b> {
-    AlonzoCompatibleMint(
-        &'b alonzo::PolicyId,
-        &'b KeyValuePairs<alonzo::AssetName, i64>,
-    ),
-    AlonzoCompatibleOutput(
-        &'b alonzo::PolicyId,
-        &'b KeyValuePairs<alonzo::AssetName, u64>,
-    ),
+    AlonzoCompatibleMint(&'b alonzo::PolicyId, &'b BTreeMap<alonzo::AssetName, i64>),
+    AlonzoCompatibleOutput(&'b alonzo::PolicyId, &'b BTreeMap<alonzo::AssetName, u64>),
     ConwayMint(
         &'b alonzo::PolicyId,
-        &'b NonEmptyKeyValuePairs<alonzo::AssetName, NonZeroInt>,
+        &'b BTreeMap<alonzo::AssetName, NonZeroInt>,
     ),
     ConwayOutput(
         &'b alonzo::PolicyId,
-        &'b NonEmptyKeyValuePairs<alonzo::AssetName, PositiveCoin>,
+        &'b BTreeMap<alonzo::AssetName, PositiveCoin>,
     ),
 }
 
@@ -177,6 +181,19 @@ pub enum MultiEraUpdate<'b> {
     Byron(u64, Box<Cow<'b, byron::UpProp>>),
     AlonzoCompatible(Box<Cow<'b, alonzo::Update>>),
     Babbage(Box<Cow<'b, babbage::Update>>),
+    Conway(Box<Cow<'b, conway::Update>>),
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum MultiEraProposal<'b> {
+    Conway(Box<Cow<'b, conway::ProposalProcedure>>),
+}
+
+#[derive(Debug, Clone)]
+#[non_exhaustive]
+pub enum MultiEraGovAction<'b> {
+    Conway(Box<Cow<'b, conway::GovAction>>),
 }
 
 #[derive(Debug, Clone)]

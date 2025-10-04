@@ -1,0 +1,85 @@
+use pallas_codec::minicbor::{decode, encode, Decode, Decoder, Encode, Encoder};
+
+use super::{DmqMsg, DmqMsgPayload, DmqMsgValidationError};
+
+impl<'b> Decode<'b, ()> for DmqMsg {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        d.array()?;
+        let payload = DmqMsgPayload::decode(d, _ctx)?;
+        let kes_signature = d.bytes()?.to_vec();
+        let operational_certificate = d.bytes()?.to_vec();
+        let cold_verification_key = d.bytes()?.to_vec();
+        Ok(DmqMsg {
+            msg_payload: payload,
+            kes_signature,
+            operational_certificate,
+            cold_verification_key,
+        })
+    }
+}
+
+impl Encode<()> for DmqMsg {
+    fn encode<W: encode::Write>(
+        &self,
+        e: &mut Encoder<W>,
+        _ctx: &mut (),
+    ) -> Result<(), encode::Error<W::Error>> {
+        e.array(2)?;
+        e.encode(&self.msg_payload)?;
+        e.bytes(&self.kes_signature)?;
+        e.bytes(&self.operational_certificate)?;
+        e.bytes(&self.cold_verification_key)?;
+
+        Ok(())
+    }
+}
+
+impl<'b> Decode<'b, ()> for DmqMsgPayload {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut ()) -> Result<Self, decode::Error> {
+        d.array()?;
+        let msg_id = d.bytes()?.to_vec();
+        let msg_body = d.bytes()?.to_vec();
+        let kes_period = d.u64()?;
+        let expires_at = d.u32()?;
+        Ok(DmqMsgPayload {
+            msg_id,
+            msg_body,
+            kes_period,
+            expires_at,
+        })
+    }
+}
+
+impl Encode<()> for DmqMsgPayload {
+    fn encode<W: encode::Write>(
+        &self,
+        e: &mut Encoder<W>,
+        _ctx: &mut (),
+    ) -> Result<(), encode::Error<W::Error>> {
+        e.array(6)?;
+        e.bytes(&self.msg_id)?;
+        e.bytes(&self.msg_body)?;
+        e.u64(self.kes_period)?;
+        e.u32(self.expires_at)?;
+
+        Ok(())
+    }
+}
+
+impl<'b, C> Decode<'b, C> for DmqMsgValidationError {
+    fn decode(d: &mut Decoder<'b>, _ctx: &mut C) -> Result<Self, decode::Error> {
+        Ok(DmqMsgValidationError(d.str()?.to_string()))
+    }
+}
+
+impl<C> Encode<C> for DmqMsgValidationError {
+    fn encode<W: encode::Write>(
+        &self,
+        e: &mut Encoder<W>,
+        _ctx: &mut C,
+    ) -> Result<(), encode::Error<W::Error>> {
+        e.str(&self.0)?;
+
+        Ok(())
+    }
+}

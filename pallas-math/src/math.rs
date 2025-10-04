@@ -4,13 +4,14 @@
 
 use std::fmt::{Debug, Display};
 use std::ops::{Div, Mul, Neg, Sub};
-
+use std::sync::LazyLock;
 use thiserror::Error;
 
-#[cfg(feature = "gmp")]
-use crate::math_gmp::Decimal;
-#[cfg(feature = "num")]
-use crate::math_num::Decimal;
+pub type FixedDecimal = crate::math_dashu::Decimal;
+
+pub static ZERO: LazyLock<FixedDecimal> = LazyLock::new(|| FixedDecimal::from(0u64));
+pub static MINUS_ONE: LazyLock<FixedDecimal> = LazyLock::new(|| FixedDecimal::from(-1i64));
+pub static ONE: LazyLock<FixedDecimal> = LazyLock::new(|| FixedDecimal::from(1u64));
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -41,7 +42,7 @@ pub trait FixedPrecision:
 
     /// Entry point for 'ln' approximation. First does the necessary scaling, and
     /// then calls the continued fraction calculation. For any value outside the
-    /// domain, i.e., 'x in (-inf,0]', the function returns '-INFINITY'.
+    /// domain, i.e., 'x in (-inf,0]', the function panics.
     fn ln(&self) -> Self;
 
     /// Entry point for 'pow' function. x^y = exp(y * ln x)
@@ -49,6 +50,22 @@ pub trait FixedPrecision:
 
     /// Entry point for bounded iterations for comparing two exp values.
     fn exp_cmp(&self, max_n: u64, bound_self: i64, compare: &Self) -> ExpCmpOrdering;
+
+    /// Round to the nearest integer number
+    #[must_use]
+    fn round(&self) -> Self;
+
+    /// Round down to the nearest integer number
+    #[must_use]
+    fn floor(&self) -> Self;
+
+    /// Round up to the nearest integer number
+    #[must_use]
+    fn ceil(&self) -> Self;
+
+    /// Truncate to the nearest integer number
+    #[must_use]
+    fn trunc(&self) -> Self;
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -72,54 +89,54 @@ impl From<&str> for ExpOrdering {
 pub struct ExpCmpOrdering {
     pub iterations: u64,
     pub estimation: ExpOrdering,
-    pub approx: Decimal,
+    pub approx: FixedDecimal,
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use dashu_base::Abs;
+    use proptest::prelude::Strategy;
+    use proptest::proptest;
     use std::fs::File;
     use std::io::BufRead;
     use std::path::PathBuf;
 
-    #[cfg(feature = "gmp")]
-    use crate::math_gmp::Decimal;
-    #[cfg(feature = "num")]
-    use crate::math_num::Decimal;
-
-    use super::*;
-
     #[test]
     fn test_fixed_precision() {
-        let fp: Decimal = Decimal::new(34);
+        let fp: FixedDecimal = FixedDecimal::new(34);
         assert_eq!(fp.precision(), 34);
         assert_eq!(fp.to_string(), "0.0000000000000000000000000000000000");
     }
 
     #[test]
     fn test_fixed_precision_eq() {
-        let fp1: Decimal = Decimal::new(34);
-        let fp2: Decimal = Decimal::new(34);
+        let fp1: FixedDecimal = FixedDecimal::new(34);
+        let fp2: FixedDecimal = FixedDecimal::new(34);
         assert_eq!(fp1, fp2);
     }
 
     #[test]
     fn test_fixed_precision_from_str() {
-        let fp: Decimal = Decimal::from_str("1234567890123456789012345678901234", 34).unwrap();
+        let fp: FixedDecimal =
+            FixedDecimal::from_str("1234567890123456789012345678901234", 34).unwrap();
         assert_eq!(fp.precision(), 34);
         assert_eq!(fp.to_string(), "0.1234567890123456789012345678901234");
 
-        let fp: Decimal = Decimal::from_str("-1234567890123456789012345678901234", 30).unwrap();
+        let fp: FixedDecimal =
+            FixedDecimal::from_str("-1234567890123456789012345678901234", 30).unwrap();
         assert_eq!(fp.precision(), 30);
         assert_eq!(fp.to_string(), "-1234.567890123456789012345678901234");
 
-        let fp: Decimal = Decimal::from_str("-1234567890123456789012345678901234", 34).unwrap();
+        let fp: FixedDecimal =
+            FixedDecimal::from_str("-1234567890123456789012345678901234", 34).unwrap();
         assert_eq!(fp.precision(), 34);
         assert_eq!(fp.to_string(), "-0.1234567890123456789012345678901234");
     }
 
     #[test]
     fn test_fixed_precision_exp() {
-        let fp: Decimal = Decimal::from(1u64);
+        let fp: FixedDecimal = FixedDecimal::from(1u64);
         assert_eq!(fp.to_string(), "1.0000000000000000000000000000000000");
         let exp_fp = fp.exp();
         assert_eq!(exp_fp.to_string(), "2.7182818284590452353602874043083282");
@@ -127,8 +144,10 @@ mod tests {
 
     #[test]
     fn test_fixed_precision_mul() {
-        let fp1: Decimal = Decimal::from_str("52500000000000000000000000000000000", 34).unwrap();
-        let fp2: Decimal = Decimal::from_str("43000000000000000000000000000000000", 34).unwrap();
+        let fp1: FixedDecimal =
+            FixedDecimal::from_str("52500000000000000000000000000000000", 34).unwrap();
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("43000000000000000000000000000000000", 34).unwrap();
         let fp3 = &fp1 * &fp2;
         assert_eq!(fp3.to_string(), "22.5750000000000000000000000000000000");
         let fp4 = fp1 * fp2;
@@ -137,8 +156,8 @@ mod tests {
 
     #[test]
     fn test_fixed_precision_div() {
-        let fp1: Decimal = Decimal::from_str("1", 34).unwrap();
-        let fp2: Decimal = Decimal::from_str("10", 34).unwrap();
+        let fp1: FixedDecimal = FixedDecimal::from_str("1", 34).unwrap();
+        let fp2: FixedDecimal = FixedDecimal::from_str("10", 34).unwrap();
         let fp3 = &fp1 / &fp2;
         assert_eq!(fp3.to_string(), "0.1000000000000000000000000000000000");
         let fp4 = fp1 / fp2;
@@ -147,14 +166,222 @@ mod tests {
 
     #[test]
     fn test_fixed_precision_sub() {
-        let fp1: Decimal = Decimal::from_str("1", 34).unwrap();
+        let fp1: FixedDecimal = FixedDecimal::from_str("1", 34).unwrap();
         assert_eq!(fp1.to_string(), "0.0000000000000000000000000000000001");
-        let fp2: Decimal = Decimal::from_str("10", 34).unwrap();
+        let fp2: FixedDecimal = FixedDecimal::from_str("10", 34).unwrap();
         assert_eq!(fp2.to_string(), "0.0000000000000000000000000000000010");
         let fp3 = &fp1 - &fp2;
         assert_eq!(fp3.to_string(), "-0.0000000000000000000000000000000009");
         let fp4 = fp1 - fp2;
         assert_eq!(fp4.to_string(), "-0.0000000000000000000000000000000009");
+    }
+
+    #[test]
+    fn test_fixed_precision_round() {
+        let fp1: FixedDecimal =
+            FixedDecimal::from_str("11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp1.round().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.round().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.round().to_string(),
+            "2.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("1500", 3).unwrap();
+        assert_eq!(fp4.round().to_string(), "2.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("1499", 3).unwrap();
+        assert_eq!(fp5.round().to_string(), "1.000");
+        let fp6: FixedDecimal =
+            FixedDecimal::from_str("-11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp6.round().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("-14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.round().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("-15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.round().to_string(),
+            "-2.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("-1500", 3).unwrap();
+        assert_eq!(fp4.round().to_string(), "-2.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("-1499", 3).unwrap();
+        assert_eq!(fp5.round().to_string(), "-1.000");
+        let fp6: FixedDecimal = FixedDecimal::from_str("1000", 3).unwrap();
+        assert_eq!(fp6.round().to_string(), "1.000");
+        let fp7: FixedDecimal = FixedDecimal::from_str("-1000", 3).unwrap();
+        assert_eq!(fp7.round().to_string(), "-1.000");
+    }
+
+    #[test]
+    fn test_fixed_precision_floor() {
+        let fp1: FixedDecimal =
+            FixedDecimal::from_str("11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp1.floor().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.floor().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.floor().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("1500", 3).unwrap();
+        assert_eq!(fp4.floor().to_string(), "1.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("1499", 3).unwrap();
+        assert_eq!(fp5.floor().to_string(), "1.000");
+        let fp6: FixedDecimal =
+            FixedDecimal::from_str("-11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp6.floor().to_string(),
+            "-2.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("-14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.floor().to_string(),
+            "-2.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("-15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.floor().to_string(),
+            "-2.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("-1500", 3).unwrap();
+        assert_eq!(fp4.floor().to_string(), "-2.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("-1499", 3).unwrap();
+        assert_eq!(fp5.floor().to_string(), "-2.000");
+        let fp6: FixedDecimal = FixedDecimal::from_str("1000", 3).unwrap();
+        assert_eq!(fp6.floor().to_string(), "1.000");
+        let fp7: FixedDecimal = FixedDecimal::from_str("-1000", 3).unwrap();
+        assert_eq!(fp7.floor().to_string(), "-1.000");
+    }
+
+    #[test]
+    fn test_fixed_precision_ceil() {
+        let fp1: FixedDecimal =
+            FixedDecimal::from_str("11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp1.ceil().to_string(),
+            "2.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.ceil().to_string(),
+            "2.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.ceil().to_string(),
+            "2.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("1500", 3).unwrap();
+        assert_eq!(fp4.ceil().to_string(), "2.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("1499", 3).unwrap();
+        assert_eq!(fp5.ceil().to_string(), "2.000");
+        let fp6: FixedDecimal =
+            FixedDecimal::from_str("-11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp6.ceil().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("-14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.ceil().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("-15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.ceil().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("-1500", 3).unwrap();
+        assert_eq!(fp4.ceil().to_string(), "-1.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("-1499", 3).unwrap();
+        assert_eq!(fp5.ceil().to_string(), "-1.000");
+        let fp6: FixedDecimal = FixedDecimal::from_str("1000", 3).unwrap();
+        assert_eq!(fp6.ceil().to_string(), "1.000");
+        let fp7: FixedDecimal = FixedDecimal::from_str("-1000", 3).unwrap();
+        assert_eq!(fp7.ceil().to_string(), "-1.000");
+    }
+
+    #[test]
+    fn test_fixed_precision_trunc() {
+        let fp1: FixedDecimal =
+            FixedDecimal::from_str("11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp1.trunc().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.trunc().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.trunc().to_string(),
+            "1.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("1500", 3).unwrap();
+        assert_eq!(fp4.trunc().to_string(), "1.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("1499", 3).unwrap();
+        assert_eq!(fp5.trunc().to_string(), "1.000");
+        let fp6: FixedDecimal =
+            FixedDecimal::from_str("-11234567890123456789012345678901234", 34).unwrap();
+        assert_eq!(
+            fp6.trunc().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp2: FixedDecimal =
+            FixedDecimal::from_str("-14999999999999999999999999999999999", 34).unwrap();
+        assert_eq!(
+            fp2.trunc().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp3: FixedDecimal =
+            FixedDecimal::from_str("-15000000000000000000000000000000000", 34).unwrap();
+        assert_eq!(
+            fp3.trunc().to_string(),
+            "-1.0000000000000000000000000000000000"
+        );
+        let fp4: FixedDecimal = FixedDecimal::from_str("-1500", 3).unwrap();
+        assert_eq!(fp4.trunc().to_string(), "-1.000");
+        let fp5: FixedDecimal = FixedDecimal::from_str("-1499", 3).unwrap();
+        assert_eq!(fp5.trunc().to_string(), "-1.000");
+        let fp6: FixedDecimal = FixedDecimal::from_str("1000", 3).unwrap();
+        assert_eq!(fp6.trunc().to_string(), "1.000");
+        let fp7: FixedDecimal = FixedDecimal::from_str("-1000", 3).unwrap();
+        assert_eq!(fp7.trunc().to_string(), "-1.000");
     }
 
     #[test]
@@ -172,20 +399,20 @@ mod tests {
         let file = File::open(data_path).expect("golden_tests_result.txt: file not found");
         let result_reader = std::io::BufReader::new(file);
 
-        let one: Decimal = Decimal::from(1u64);
-        let ten: Decimal = Decimal::from(10u64);
-        let f: Decimal = &one / &ten;
+        let one: FixedDecimal = FixedDecimal::from(1u64);
+        let ten: FixedDecimal = FixedDecimal::from(10u64);
+        let f: FixedDecimal = &one / &ten;
         assert_eq!(f.to_string(), "0.1000000000000000000000000000000000");
 
         for (test_line, result_line) in reader.lines().zip(result_reader.lines()) {
             let test_line = test_line.expect("failed to read line");
             // println!("test_line: {}", test_line);
             let mut parts = test_line.split_whitespace();
-            let x = Decimal::from_str(parts.next().unwrap(), DEFAULT_PRECISION)
+            let x = FixedDecimal::from_str(parts.next().unwrap(), DEFAULT_PRECISION)
                 .expect("failed to parse x");
-            let a = Decimal::from_str(parts.next().unwrap(), DEFAULT_PRECISION)
+            let a = FixedDecimal::from_str(parts.next().unwrap(), DEFAULT_PRECISION)
                 .expect("failed to parse a");
-            let b = Decimal::from_str(parts.next().unwrap(), DEFAULT_PRECISION)
+            let b = FixedDecimal::from_str(parts.next().unwrap(), DEFAULT_PRECISION)
                 .expect("failed to parse b");
             let result_line = result_line.expect("failed to read line");
             // println!("result_line: {}", result_line);
@@ -210,7 +437,13 @@ mod tests {
             let c = &one - &f;
             assert_eq!(c.to_string(), "0.9000000000000000000000000000000000");
             let threshold_b = c.pow(&b);
-            assert_eq!((&one - &threshold_b).to_string(), expected_threshold_b);
+            assert_eq!(
+                (&one - &threshold_b).to_string(),
+                expected_threshold_b,
+                "(1 - f) *** b failed to match! - (1 - f)={}, b={}",
+                &c,
+                &b
+            );
 
             // do Taylor approximation for
             //  a < 1 - (1 - f) *** b <=> 1/(1-a) < exp(-b * ln' (1 - f))
@@ -252,5 +485,61 @@ mod tests {
             assert_eq!(res.estimation, expected_estimation);
             assert_eq!(res.iterations.to_string(), expected_iterations);
         }
+    }
+
+    #[test]
+    #[should_panic(expected = "ln of a value in (-inf,0] is undefined")]
+    fn ln_of_0_should_be_undefined() {
+        ZERO.ln();
+    }
+
+    #[test]
+    #[should_panic(expected = "ln of a value in (-inf,0] is undefined")]
+    fn ln_of_negative_should_be_undefined() {
+        MINUS_ONE.ln();
+    }
+
+    #[test]
+    fn pow_of_zero_to_any_positive_power_should_be_zero() {
+        proptest!(|(y in 1u64..=u64::MAX)| {
+            assert_eq!(ZERO.pow(&FixedDecimal::from(y)), *ZERO);
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "zero to a negative power is undefined")]
+    fn pow_of_zero_to_neg_power_should_be_undefined() {
+        let y = FixedDecimal::from(-1i64);
+        ZERO.pow(&y);
+    }
+
+    #[test]
+    fn pow_of_any_to_power_0_should_be_1() {
+        proptest!(|(x in i64::MIN..=i64::MAX)| {
+            assert_eq!(FixedDecimal::from(x).pow(&*ZERO), *ONE);
+        });
+    }
+
+    #[test]
+    fn pow_of_any_to_power_1_should_be_same() {
+        proptest!(|(x in i64::MIN..=i64::MAX)| {
+            assert_eq!(FixedDecimal::from(x).pow(&*ONE), FixedDecimal::from(x));
+        });
+    }
+
+    #[test]
+    fn pow_to_positive_times_pow_to_negative_should_be_1() {
+        let epsilon = FixedDecimal::from_str("1000000000000000000", 34).unwrap();
+        proptest!(|(x in (-5i64..=5i64).prop_filter("Exclude zero", |&x| x != 0), y in 1i64..=25i64)| {
+            let x = FixedDecimal::from(x);
+            let y = FixedDecimal::from(y);
+            let minus_y = -&y;
+            let x_to_y = x.pow(&y);
+            let x_to_minus_y = x.pow(&minus_y);
+            let result = &x_to_y * &x_to_minus_y;
+            let diff = (&result - &*ONE).abs();
+            // println!("x: {}, y: {}, x^y: {}, x^-y: {}, x^y * x^-y: {}, diff: {}", x, y, x_to_y, x_to_minus_y, result, diff);
+            assert!(diff <= epsilon);
+        });
     }
 }

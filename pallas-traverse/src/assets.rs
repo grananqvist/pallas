@@ -2,7 +2,7 @@ use pallas_crypto::hash::Hash;
 
 use crate::{MultiEraAsset, MultiEraPolicyAssets};
 
-impl<'b> MultiEraPolicyAssets<'b> {
+impl MultiEraPolicyAssets<'_> {
     pub fn policy(&self) -> &Hash<28> {
         match self {
             MultiEraPolicyAssets::AlonzoCompatibleMint(x, _) => x,
@@ -30,7 +30,7 @@ impl<'b> MultiEraPolicyAssets<'b> {
         }
     }
 
-    pub fn assets(&self) -> Vec<MultiEraAsset> {
+    pub fn assets(&self) -> Vec<MultiEraAsset<'_>> {
         match self {
             MultiEraPolicyAssets::AlonzoCompatibleMint(p, x) => x
                 .iter()
@@ -74,7 +74,7 @@ impl<'b> MultiEraPolicyAssets<'b> {
     }
 }
 
-impl<'b> MultiEraAsset<'b> {
+impl MultiEraAsset<'_> {
     pub fn policy(&self) -> &Hash<28> {
         match self {
             MultiEraAsset::AlonzoCompatibleMint(x, ..) => x,

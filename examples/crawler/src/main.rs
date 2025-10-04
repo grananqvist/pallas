@@ -12,14 +12,14 @@ use pallas::{
 
 // An arbitrary predicate to decide whether to save the block or not;
 // fill in with your own purpose built logic
-async fn block_matches<'a>(block: &MultiEraBlock<'a>) -> bool {
+async fn block_matches(block: &MultiEraBlock<'_>) -> bool {
     // As an example, we save any blocks that have an "Update proposal" in any era
     block.update().is_some() || block.txs().iter().any(|tx| tx.update().is_some())
 }
 
 // An arbitrary predicate to decide whether to save the transaction or not;
 // fill in with your own purpose built logic
-async fn tx_matches<'a>(_tx: &MultiEraTx<'a>) -> bool {
+async fn tx_matches(_tx: &MultiEraTx<'_>) -> bool {
     false
 }
 
@@ -41,7 +41,8 @@ async fn main() -> Result<()> {
         .await?;
 
     loop {
-        // We either request the next block, or wait until we're told that the block is ready
+        // We either request the next block, or wait until we're told that the block is
+        // ready
         let next = client.chainsync().request_or_await_next().await?;
         // And depending on the message we receive...
         match next {
@@ -56,12 +57,12 @@ async fn main() -> Result<()> {
                 let hash = block.hash();
 
                 if height % 10000 == 0 {
-                    println!("Processed block height {}: {}/{}", height, slot, hash);
+                    println!("Processed block height {height}: {slot}/{hash}");
                 }
                 // And check each transaction for the predicate, and save if needed
                 for tx in block.txs() {
                     if tx_matches(&tx).await {
-                        println!("Found matching tx in block {}/{}", slot, hash);
+                        println!("Found matching tx in block {slot}/{hash}");
                         // Make sure we create the out diretory
                         std::fs::create_dir_all(format!("{}/txs", args.out.to_str().unwrap()))
                             .context("couldn't create output directory")?;
@@ -70,7 +71,7 @@ async fn main() -> Result<()> {
                 }
                 // Then, we can check the block as a whole
                 if block_matches(&block).await {
-                    println!("Found matching block {}/{}", slot, hash);
+                    println!("Found matching block {slot}/{hash}");
                     // Make sure we create the out diretory
                     std::fs::create_dir_all(format!("{}/blocks", args.out.to_str().unwrap()))
                         .context("couldn't create output directory")?;
@@ -101,7 +102,8 @@ struct Args {
     /// The network magic used to handshake with that node; defaults to mainnet
     #[arg(short, long, env("CARDANO_NETWORK_MAGIC"), default_value_t = 764824073)]
     pub network_magic: u64,
-    /// A list of points to use when trying to decide a startpoint; defaults to origin
+    /// A list of points to use when trying to decide a startpoint; defaults to
+    /// origin
     #[arg(short, long, value_parser = parse_point)]
     pub point: Vec<Point>,
     /// Download only the first block found that matches this criteria

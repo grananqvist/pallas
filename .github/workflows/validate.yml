@@ -1,7 +1,8 @@
 # Based on https://github.com/actions-rs/meta/blob/master/recipes/quickstart.md
 
 on:
-  push: { }
+  push:
+  pull_request:
 
 name: Validate
 
@@ -18,27 +19,31 @@ jobs:
 
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.rust }}
 
-      - name: Run cargo check Windows
-        if: matrix.os == 'windows-latest'
-        run: cargo check --no-default-features --features num
-
       - name: Run cargo check
-        if: matrix.os != 'windows-latest'
         run: cargo check
 
   test:
     name: Test Suite
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ windows-latest, ubuntu-latest, macOS-latest ]
+        rust: [ stable ]
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+        with:
+          submodules: true
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -46,29 +51,14 @@ jobs:
           toolchain: stable
 
       - name: Run cargo test
-        run: cargo test
-
-  test-windows:
-    name: Test Suite Windows
-    runs-on: windows-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v2
-
-      - name: Install stable toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-
-      - name: Run cargo test
-        run: cargo test --no-default-features --features num
+        run: cargo test --release --features blueprint
 
   lints:
     name: Lints
     runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -80,6 +70,4 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run cargo clippy
-        run: |
-          cargo clippy -- -D warnings
-          cargo clippy --no-default-features --features num -- -D warnings
+        run: cargo clippy -- -D warnings

@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use pallas_codec::minicbor;
 use pallas_primitives::{alonzo, conway};
 
 use crate::MultiEraRedeemer;
@@ -52,6 +53,18 @@ impl<'b> MultiEraRedeemer<'b> {
         }
     }
 
+    pub fn into_conway_deprecated(&self) -> Option<conway::Redeemer> {
+        match self {
+            Self::AlonzoCompatible(_) => None,
+            Self::Conway(x, y) => Some(conway::Redeemer {
+                tag: x.tag,
+                index: x.index,
+                data: y.data.clone(),
+                ex_units: y.ex_units,
+            }),
+        }
+    }
+
     pub fn from_alonzo_compatible(redeemer: &'b alonzo::Redeemer) -> Self {
         Self::AlonzoCompatible(Box::new(Cow::Borrowed(redeemer)))
     }
@@ -64,5 +77,25 @@ impl<'b> MultiEraRedeemer<'b> {
             Box::new(Cow::Borrowed(redeemers_key)),
             Box::new(Cow::Borrowed(redeemers_val)),
         )
+    }
+
+    pub fn from_conway_deprecated(redeemer: &'b conway::Redeemer) -> Self {
+        Self::Conway(
+            Box::new(Cow::Owned(conway::RedeemersKey {
+                tag: redeemer.tag,
+                index: redeemer.index,
+            })),
+            Box::new(Cow::Owned(conway::RedeemersValue {
+                data: redeemer.data.clone(),
+                ex_units: redeemer.ex_units,
+            })),
+        )
+    }
+
+    pub fn encode(&self) -> Vec<u8> {
+        match self {
+            MultiEraRedeemer::AlonzoCompatible(x) => minicbor::to_vec(x).unwrap(),
+            MultiEraRedeemer::Conway(k, v) => minicbor::to_vec((k, v)).unwrap(),
+        }
     }
 }

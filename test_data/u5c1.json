@@ -22,6 +22,11 @@
         "inputs": [
           {
             "redeemer": {
+              "exUnits": {
+                "memory": "2893153",
+                "steps": "1254988362"
+              },
+              "originalCbor": "hAAAGgAtxsCCGgAsJWEaSs2aSg==",
               "payload": {
                 "bigInt": {
                   "int": "3000000"
@@ -33,6 +38,12 @@
           },
           {
             "redeemer": {
+              "exUnits": {
+                "memory": "29039",
+                "steps": "9759373"
+              },
+              "index": 1,
+              "originalCbor": "hAAB2HmAghlxbxoAlOqN",
               "payload": {
                 "constr": {
                   "tag": 121
@@ -45,6 +56,12 @@
           {
             "outputIndex": 2,
             "redeemer": {
+              "exUnits": {
+                "memory": "23776",
+                "steps": "8949203"
+              },
+              "index": 2,
+              "originalCbor": "hAAC2HmAghlc4BoAiI3T",
               "payload": {
                 "constr": {
                   "tag": 121
@@ -1252,16 +1269,16 @@
               {
                 "assets": [
                   {
-                    "name": "U1BBQ0U=",
-                    "outputCoin": "3"
-                  },
-                  {
                     "name": "R1JBVklUWQ==",
                     "outputCoin": "2"
                   },
                   {
                     "name": "U0FURUxMSVRF",
                     "outputCoin": "5"
+                  },
+                  {
+                    "name": "U1BBQ0U=",
+                    "outputCoin": "3"
                   }
                 ],
                 "policyId": "J+7hlYjJl8pU0xN/ZK/lWhjfz5Bi+oOnJL8jVw=="
@@ -1384,6 +1401,12 @@
           },
           {
             "redeemer": {
+              "exUnits": {
+                "memory": "862260",
+                "steps": "283080173"
+              },
+              "index": 1,
+              "originalCbor": "hAAB2HmAghoADSg0GhDfde0=",
               "payload": {
                 "constr": {
                   "tag": 121
@@ -1410,7 +1433,284 @@
             ],
             "coin": "1331790",
             "datum": {
-              "hash": "wLd4Sun9luNq5ergDxq1VytUAhPx2OPXJ97CUcV47Dk="
+              "hash": "wLd4Sun9luNq5ergDxq1VytUAhPx2OPXJ97CUcV47Dk=",
+              "payload": {
+                "constr": {
+                  "fields": [
+                    {
+                      "boundedBytes": "28g7VlEPsIUagX+4g6yhXoBu9H0+YuyXVz5M7Q=="
+                    },
+                    {
+                      "array": {
+                        "items": [
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "constr": {
+                                    "fields": [
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "boundedBytes": "k4KdP2JHM6D7UPZkSpMR4NB4yJvlsJDi1udgQQ=="
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      },
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "constr": {
+                                                "fields": [
+                                                  {
+                                                    "constr": {
+                                                      "fields": [
+                                                        {
+                                                          "boundedBytes": "cwTHD2/DOA6P1sBZRsiBbylhD9RmM+CIh2mvJA=="
+                                                        }
+                                                      ],
+                                                      "tag": 121
+                                                    }
+                                                  }
+                                                ],
+                                                "tag": 121
+                                              }
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      }
+                                    ],
+                                    "tag": 121
+                                  }
+                                },
+                                {
+                                  "map": {
+                                    "pairs": [
+                                      {
+                                        "key": {
+                                          "boundedBytes": ""
+                                        },
+                                        "value": {
+                                          "constr": {
+                                            "fields": [
+                                              {
+                                                "bigInt": {
+                                                  "int": "0"
+                                                }
+                                              },
+                                              {
+                                                "map": {
+                                                  "pairs": [
+                                                    {
+                                                      "key": {
+                                                        "boundedBytes": ""
+                                                      },
+                                                      "value": {
+                                                        "bigInt": {
+                                                          "int": "3500000"
+                                                        }
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ],
+                                            "tag": 121
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          },
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "constr": {
+                                    "fields": [
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "boundedBytes": "cOYPO16nFT4KzHqAPkQB1EuO0brhx7qq0aYqcg=="
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      },
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "constr": {
+                                                "fields": [
+                                                  {
+                                                    "constr": {
+                                                      "fields": [
+                                                        {
+                                                          "boundedBytes": "Hniq58kMw21iT3s7tthrUmltyE5JDzQ+uokAXw=="
+                                                        }
+                                                      ],
+                                                      "tag": 121
+                                                    }
+                                                  }
+                                                ],
+                                                "tag": 121
+                                              }
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      }
+                                    ],
+                                    "tag": 121
+                                  }
+                                },
+                                {
+                                  "map": {
+                                    "pairs": [
+                                      {
+                                        "key": {
+                                          "boundedBytes": ""
+                                        },
+                                        "value": {
+                                          "constr": {
+                                            "fields": [
+                                              {
+                                                "bigInt": {
+                                                  "int": "0"
+                                                }
+                                              },
+                                              {
+                                                "map": {
+                                                  "pairs": [
+                                                    {
+                                                      "key": {
+                                                        "boundedBytes": ""
+                                                      },
+                                                      "value": {
+                                                        "bigInt": {
+                                                          "int": "1000000"
+                                                        }
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ],
+                                            "tag": 121
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          },
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "constr": {
+                                    "fields": [
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "boundedBytes": "28g7VlEPsIUagX+4g6yhXoBu9H0+YuyXVz5M7Q=="
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      },
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "constr": {
+                                                "fields": [
+                                                  {
+                                                    "constr": {
+                                                      "fields": [
+                                                        {
+                                                          "boundedBytes": "VuwwBUiAIcXEYel9rG/E9u+1kbgcVkVgZgBq/Q=="
+                                                        }
+                                                      ],
+                                                      "tag": 121
+                                                    }
+                                                  }
+                                                ],
+                                                "tag": 121
+                                              }
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      }
+                                    ],
+                                    "tag": 121
+                                  }
+                                },
+                                {
+                                  "map": {
+                                    "pairs": [
+                                      {
+                                        "key": {
+                                          "boundedBytes": ""
+                                        },
+                                        "value": {
+                                          "constr": {
+                                            "fields": [
+                                              {
+                                                "bigInt": {
+                                                  "int": "0"
+                                                }
+                                              },
+                                              {
+                                                "map": {
+                                                  "pairs": [
+                                                    {
+                                                      "key": {
+                                                        "boundedBytes": ""
+                                                      },
+                                                      "value": {
+                                                        "bigInt": {
+                                                          "int": "45500000"
+                                                        }
+                                                      }
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            ],
+                                            "tag": 121
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "tag": 121
+                }
+              }
             }
           },
           {
@@ -2018,6 +2318,12 @@
           },
           {
             "redeemer": {
+              "exUnits": {
+                "memory": "312977",
+                "steps": "151500123"
+              },
+              "index": 1,
+              "originalCbor": "hAAB2HqfUCgL7p8Ifi1y1Y0n3fHPaAb/ghoABMaRGgkHtVs=",
               "payload": {
                 "constr": {
                   "fields": [
@@ -2043,6 +2349,11 @@
             ],
             "policyId": "J5+ELDPu2QVLnjxwzWo7MimCWcJLeLiVy0HZGg==",
             "redeemer": {
+              "exUnits": {
+                "memory": "56931",
+                "steps": "22622736"
+              },
+              "originalCbor": "hAEA2HmAghneYxoBWTIQ",
               "payload": {
                 "constr": {
                   "tag": 121
@@ -2480,7 +2791,136 @@
             "address": "EaZcpYpOnHVfqDAXPSpcrtRYrAxz+X23+q4ufjtSVjxUEL/2oNQ8zrt8N+H2n16yYFUlIa3/M7nC",
             "coin": "24000000",
             "datum": {
-              "hash": "RWHeROwzpN7HciNvE3fbGOxm3n9Fv6SXz3Cml/2TQmc="
+              "hash": "RWHeROwzpN7HciNvE3fbGOxm3n9Fv6SXz3Cml/2TQmc=",
+              "payload": {
+                "constr": {
+                  "fields": [
+                    {
+                      "constr": {
+                        "fields": [
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "boundedBytes": "60UPHBZ0BkuofGWl7L56joLW0CyNzr+dVB22PQ=="
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          },
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "constr": {
+                                    "fields": [
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "boundedBytes": "tH8pLxZVBHMhSuODKn1hCAyNSzvBwyKbJvtpsA=="
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      }
+                                    ],
+                                    "tag": 121
+                                  }
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          }
+                        ],
+                        "tag": 121
+                      }
+                    },
+                    {
+                      "constr": {
+                        "fields": [
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "boundedBytes": "60UPHBZ0BkuofGWl7L56joLW0CyNzr+dVB22PQ=="
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          },
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "constr": {
+                                    "fields": [
+                                      {
+                                        "constr": {
+                                          "fields": [
+                                            {
+                                              "boundedBytes": "tH8pLxZVBHMhSuODKn1hCAyNSzvBwyKbJvtpsA=="
+                                            }
+                                          ],
+                                          "tag": 121
+                                        }
+                                      }
+                                    ],
+                                    "tag": 121
+                                  }
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          }
+                        ],
+                        "tag": 121
+                      }
+                    },
+                    {
+                      "constr": {
+                        "tag": 122
+                      }
+                    },
+                    {
+                      "constr": {
+                        "fields": [
+                          {
+                            "constr": {
+                              "fields": [
+                                {
+                                  "boundedBytes": "DAArUd8aVBlIGcCZD1LRRoK7s+k6WAUufIH3HA=="
+                                },
+                                {
+                                  "boundedBytes": "QlVLRUxF"
+                                }
+                              ],
+                              "tag": 121
+                            }
+                          },
+                          {
+                            "bigInt": {
+                              "int": "8726271"
+                            }
+                          }
+                        ],
+                        "tag": 121
+                      }
+                    },
+                    {
+                      "bigInt": {
+                        "int": "2000000"
+                      }
+                    },
+                    {
+                      "bigInt": {
+                        "int": "2000000"
+                      }
+                    }
+                  ],
+                  "tag": 121
+                }
+              }
             }
           },
           {

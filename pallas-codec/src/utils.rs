@@ -1,10 +1,16 @@
 use minicbor::{
-    data::{Tag, Type},
+    data::{IanaTag, Tag, Type},
     decode::Error,
     Decode, Encode,
 };
 use serde::{Deserialize, Serialize};
-use std::{fmt, hash::Hash as StdHash, ops::Deref};
+use std::{borrow::Cow, str::FromStr};
+use std::{
+    collections::HashMap,
+    fmt,
+    hash::Hash as StdHash,
+    ops::{Deref, DerefMut},
+};
 
 static TAG_SET: u64 = 258;
 
@@ -64,6 +70,16 @@ where
     }
 }
 
+impl<K, V> FromIterator<(K, V)> for KeyValuePairs<K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+    fn from_iter<T: IntoIterator<Item = (K, V)>>(iter: T) -> Self {
+        KeyValuePairs::Def(Vec::from_iter(iter))
+    }
+}
+
 impl<K, V> From<KeyValuePairs<K, V>> for Vec<(K, V)>
 where
     K: Clone,
@@ -84,6 +100,28 @@ where
 {
     fn from(other: Vec<(K, V)>) -> Self {
         KeyValuePairs::Def(other)
+    }
+}
+
+impl<K, V> From<KeyValuePairs<K, V>> for HashMap<K, V>
+where
+    K: Clone + Eq + std::hash::Hash,
+    V: Clone,
+{
+    fn from(other: KeyValuePairs<K, V>) -> Self {
+        match other {
+            KeyValuePairs::Def(x) => x.into_iter().collect(),
+            KeyValuePairs::Indef(x) => x.into_iter().collect(),
+        }
+    }
+}
+impl<K, V> From<HashMap<K, V>> for KeyValuePairs<K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+    fn from(other: HashMap<K, V>) -> Self {
+        KeyValuePairs::Def(other.into_iter().collect())
     }
 }
 
@@ -199,6 +237,14 @@ where
     pub fn to_vec(self) -> Vec<(K, V)> {
         self.into()
     }
+
+    pub fn from_vec(x: Vec<(K, V)>) -> Option<Self> {
+        if x.is_empty() {
+            None
+        } else {
+            Some(NonEmptyKeyValuePairs::Def(x))
+        }
+    }
 }
 
 impl<K, V> From<NonEmptyKeyValuePairs<K, V>> for Vec<(K, V)>
@@ -226,6 +272,33 @@ where
             Err("NonEmptyKeyValuePairs must contain at least one element".into())
         } else {
             Ok(NonEmptyKeyValuePairs::Def(value))
+        }
+    }
+}
+
+impl<K, V> TryFrom<KeyValuePairs<K, V>> for NonEmptyKeyValuePairs<K, V>
+where
+    K: Clone,
+    V: Clone,
+{
+    type Error = String;
+
+    fn try_from(value: KeyValuePairs<K, V>) -> Result<Self, Self::Error> {
+        match value {
+            KeyValuePairs::Def(x) => {
+                if x.is_empty() {
+                    Err("NonEmptyKeyValuePairs must contain at least one element".into())
+                } else {
+                    Ok(NonEmptyKeyValuePairs::Def(x))
+                }
+            }
+            KeyValuePairs::Indef(x) => {
+                if x.is_empty() {
+                    Err("NonEmptyKeyValuePairs must contain at least one element".into())
+                } else {
+                    Ok(NonEmptyKeyValuePairs::Indef(x))
+                }
+            }
         }
     }
 }
@@ -483,7 +556,7 @@ where
             minicbor::encode::Error::message("error encoding cbor-wrapped structure")
         })?;
 
-        e.tag(Tag::Cbor)?;
+        e.tag(IanaTag::Cbor)?;
         e.bytes(&buf)?;
 
         Ok(())
@@ -503,6 +576,12 @@ pub struct TagWrap<I, const T: u64>(pub I);
 
 impl<I, const T: u64> TagWrap<I, T> {
     pub fn new(inner: I) -> Self {
+        TagWrap(inner)
+    }
+}
+
+impl<I, const T: u64> From<I> for TagWrap<I, T> {
+    fn from(inner: I) -> Self {
         TagWrap(inner)
     }
 }
@@ -527,7 +606,7 @@ where
         e: &mut minicbor::Encoder<W>,
         ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.tag(Tag::Unassigned(T))?;
+        e.tag(Tag::new(T))?;
         e.encode_with(&self.0, ctx)?;
 
         Ok(())
@@ -681,7 +760,7 @@ where
         if d.datatype()? == Type::Tag {
             let found_tag = d.tag()?;
 
-            if found_tag != Tag::Unassigned(TAG_SET) {
+            if found_tag != Tag::new(TAG_SET) {
                 return Err(Error::message(format!("Unrecognised tag: {found_tag:?}")));
             }
         }
@@ -699,7 +778,7 @@ where
         e: &mut minicbor::Encoder<W>,
         ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.tag(Tag::Unassigned(TAG_SET))?;
+        e.tag(Tag::new(TAG_SET))?;
         e.encode_with(&self.0, ctx)?;
 
         Ok(())
@@ -716,6 +795,14 @@ pub struct NonEmptySet<T>(Vec<T>);
 impl<T> NonEmptySet<T> {
     pub fn to_vec(self) -> Vec<T> {
         self.0
+    }
+
+    pub fn from_vec(x: Vec<T>) -> Option<Self> {
+        if x.is_empty() {
+            None
+        } else {
+            Some(Self(x))
+        }
     }
 }
 
@@ -764,7 +851,7 @@ where
         if d.datatype()? == Type::Tag {
             let found_tag = d.tag()?;
 
-            if found_tag != Tag::Unassigned(TAG_SET) {
+            if found_tag != Tag::new(TAG_SET) {
                 return Err(Error::message(format!("Unrecognised tag: {found_tag:?}")));
             }
         }
@@ -788,7 +875,7 @@ where
         e: &mut minicbor::Encoder<W>,
         ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.tag(Tag::Unassigned(TAG_SET))?;
+        e.tag(Tag::new(TAG_SET))?;
         e.encode_with(&self.0, ctx)?;
 
         Ok(())
@@ -810,17 +897,22 @@ impl<'b, C> minicbor::decode::Decode<'b, C> for AnyUInt {
         d: &mut minicbor::Decoder<'b>,
         _ctx: &mut C,
     ) -> Result<Self, minicbor::decode::Error> {
-        match d.datatype()? {
-            minicbor::data::Type::U8 => match d.u8()? {
+        let data_type = d.datatype()?;
+
+        use minicbor::data::Type::*;
+        match data_type {
+            U8 => match d.u8()? {
                 x @ 0..=0x17 => Ok(AnyUInt::MajorByte(x)),
                 x @ 0x18..=0xff => Ok(AnyUInt::U8(x)),
             },
-            minicbor::data::Type::U16 => Ok(AnyUInt::U16(d.u16()?)),
-            minicbor::data::Type::U32 => Ok(AnyUInt::U32(d.u32()?)),
-            minicbor::data::Type::U64 => Ok(AnyUInt::U64(d.u64()?)),
-            _ => Err(minicbor::decode::Error::message(
-                "invalid data type for AnyUInt",
-            )),
+            U16 => Ok(AnyUInt::U16(d.u16()?)),
+            U32 => Ok(AnyUInt::U32(d.u32()?)),
+            U64 => Ok(AnyUInt::U64(d.u64()?)),
+            _ => Err(minicbor::decode::Error::message(format!(
+                "invalid data type for AnyUInt at position {}: {}",
+                d.position(),
+                data_type
+            ))),
         }
     }
 }
@@ -905,8 +997,11 @@ impl From<&AnyUInt> for u64 {
 
 /// Introduced in Conway
 /// positive_coin = 1 .. 18446744073709551615
-#[derive(Debug, PartialEq, Copy, Clone, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Encode, Decode, Debug, PartialEq, Copy, Clone, PartialOrd, Eq, Ord, Hash, Serialize, Deserialize,
+)]
 #[serde(transparent)]
+#[cbor(transparent)]
 pub struct PositiveCoin(u64);
 
 impl TryFrom<u64> for PositiveCoin {
@@ -930,30 +1025,6 @@ impl From<PositiveCoin> for u64 {
 impl From<&PositiveCoin> for u64 {
     fn from(x: &PositiveCoin) -> Self {
         u64::from(*x)
-    }
-}
-
-impl<'b, C> minicbor::decode::Decode<'b, C> for PositiveCoin {
-    fn decode(d: &mut minicbor::Decoder<'b>, ctx: &mut C) -> Result<Self, minicbor::decode::Error> {
-        let n = d.decode_with(ctx)?;
-
-        if n == 0 {
-            return Err(Error::message("decoding 0 as PositiveCoin"));
-        }
-
-        Ok(Self(n))
-    }
-}
-
-impl<C> minicbor::encode::Encode<C> for PositiveCoin {
-    fn encode<W: minicbor::encode::Write>(
-        &self,
-        e: &mut minicbor::Encoder<W>,
-        _ctx: &mut C,
-    ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.encode(self.0)?;
-
-        Ok(())
     }
 }
 
@@ -1030,25 +1101,57 @@ impl<C> minicbor::encode::Encode<C> for NonZeroInt {
 /// ```
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone)]
 pub struct KeepRaw<'b, T> {
-    raw: &'b [u8],
+    raw: Cow<'b, [u8]>,
     inner: T,
 }
 
-impl<'b, T> KeepRaw<'b, T> {
-    pub fn raw_cbor(&self) -> &'b [u8] {
-        self.raw
+impl<T> KeepRaw<'_, T> {
+    pub fn raw_cbor(&self) -> &[u8] {
+        &self.raw
     }
 
     pub fn unwrap(self) -> T {
         self.inner
     }
+
+    pub fn clear_raw(&mut self) {
+        self.raw = Cow::from(vec![]);
+    }
+
+    pub fn to_owned(self) -> KeepRaw<'static, T> {
+        KeepRaw {
+            raw: Cow::Owned(self.raw.into_owned()),
+            inner: self.inner,
+        }
+    }
 }
 
-impl<'b, T> Deref for KeepRaw<'b, T> {
+impl<T> Deref for KeepRaw<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl<T> DerefMut for KeepRaw<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        // If the inner value is mutated, we need to clear the raw bytes to
+        // avoid returning stale data.
+        self.clear_raw();
+
+        &mut self.inner
+    }
+}
+
+impl<T> From<T> for KeepRaw<'static, T> {
+    /// Note that the `KeepRaw` value obtained from this implementation does
+    /// **not** include a valid CBOR representation.
+    fn from(val: T) -> Self {
+        Self {
+            raw: Cow::from(vec![]),
+            inner: val,
+        }
     }
 }
 
@@ -1064,20 +1167,53 @@ where
 
         Ok(Self {
             inner,
-            raw: &all[start..end],
+            raw: Cow::Borrowed(&all[start..end]),
         })
     }
 }
 
-impl<C, T> minicbor::Encode<C> for KeepRaw<'_, T> {
+impl<C, T> minicbor::Encode<C> for KeepRaw<'_, T>
+where
+    T: minicbor::Encode<C>,
+{
     fn encode<W: minicbor::encode::Write>(
         &self,
         e: &mut minicbor::Encoder<W>,
-        _ctx: &mut C,
+        ctx: &mut C,
     ) -> Result<(), minicbor::encode::Error<W::Error>> {
-        e.writer_mut()
-            .write_all(self.raw_cbor())
-            .map_err(minicbor::encode::Error::write)
+        if self.raw_cbor().is_empty() {
+            e.encode_with(&self.inner, ctx)?;
+            Ok(())
+        } else {
+            e.writer_mut()
+                .write_all(self.raw_cbor())
+                .map_err(minicbor::encode::Error::write)
+        }
+    }
+}
+
+impl<T: Serialize> Serialize for KeepRaw<'_, T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.deref().serialize(serializer)
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for KeepRaw<'_, T> {
+    /// Note that the `KeepRaw` value obtained from this implementation does
+    /// **not** include a valid CBOR representation.
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let inner: T = T::deserialize(deserializer)?;
+
+        Ok(Self {
+            inner,
+            raw: Cow::from(vec![]),
+        })
     }
 }
 
@@ -1187,6 +1323,14 @@ where
             Nullable::Undefined => Nullable::Undefined,
         }
     }
+
+    pub fn as_ref(&self) -> Nullable<&T> {
+        match self {
+            Nullable::Some(x) => Nullable::Some(x),
+            Nullable::Null => Nullable::Null,
+            Nullable::Undefined => Nullable::Undefined,
+        }
+    }
 }
 
 impl<'b, C, T> minicbor::Decode<'b, C> for Nullable<T>
@@ -1289,11 +1433,28 @@ impl Deref for Bytes {
     }
 }
 
+impl<const N: usize> TryFrom<&Bytes> for [u8; N] {
+    type Error = core::array::TryFromSliceError;
+
+    fn try_from(value: &Bytes) -> Result<Self, Self::Error> {
+        value.0.as_slice().try_into()
+    }
+}
+
 impl TryFrom<String> for Bytes {
     type Error = hex::FromHexError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         let v = hex::decode(value)?;
+        Ok(Bytes(minicbor::bytes::ByteVec::from(v)))
+    }
+}
+
+impl FromStr for Bytes {
+    type Err = hex::FromHexError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let v = hex::decode(s)?;
         Ok(Bytes(minicbor::bytes::ByteVec::from(v)))
     }
 }
@@ -1334,6 +1495,13 @@ impl From<Int> for i128 {
     }
 }
 
+impl From<i32> for Int {
+    fn from(x: i32) -> Self {
+        let inner = minicbor::data::Int::from(x);
+        Self(inner)
+    }
+}
+
 impl From<i64> for Int {
     fn from(x: i64) -> Self {
         let inner = minicbor::data::Int::from(x);
@@ -1347,5 +1515,53 @@ impl TryFrom<i128> for Int {
     fn try_from(value: i128) -> Result<Self, Self::Error> {
         let inner = minicbor::data::Int::try_from(value)?;
         Ok(Self(inner))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keep_raw_retains_original() {
+        // Indef array info is lost when decoded. By using KeepRaw, we can retain the
+        // original bytes. This test makes sure KeepRaw is working by making use of this
+        // well-known CBOR nuance.
+
+        let raw = hex::decode("9F0102FF").unwrap();
+        let subject: KeepRaw<'_, Vec<u32>> = minicbor::decode(&raw).unwrap();
+        assert_eq!(subject.inner, vec![1, 2]);
+        assert_eq!(subject.raw_cbor(), raw);
+    }
+
+    #[test]
+    fn keep_raw_fallbacks_to_encode() {
+        // By using the From trait we can encode the inner value directly without any
+        // information about the original cbor bytes. By attempting to encode this
+        // structure we ensure that KeepRaw is falling back to the expected encode
+        // behavior.
+
+        let subject = KeepRaw::from(vec![1, 2]);
+        let encoded = minicbor::to_vec(&subject).unwrap();
+
+        assert_eq!(encoded, hex::decode("820102").unwrap());
+    }
+
+    #[test]
+    fn keep_raw_clears_original_when_mutated() {
+        // If the inner value is mutated, we need to clear the raw bytes to
+        // avoid returning stale data. This test starts from raw bytes, mutates the
+        // value and then asserts that the returned cbor matches the updates.
+
+        let raw = hex::decode("9F0102FF").unwrap();
+        let mut subject: KeepRaw<'_, Vec<u32>> = minicbor::decode(&raw).unwrap();
+
+        let inner = subject.deref_mut();
+        inner.push(3);
+
+        let encoded = minicbor::to_vec(&subject).unwrap();
+
+        assert_eq!(subject.inner, vec![1, 2, 3]);
+        assert_eq!(encoded, hex::decode("83010203").unwrap());
     }
 }

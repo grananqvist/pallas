@@ -76,9 +76,9 @@ impl OriginalHash<28> for KeepRaw<'_, alonzo::NativeScript> {
     }
 }
 
-impl ComputeHash<28> for alonzo::PlutusScript {
+impl<const VERSION: usize> ComputeHash<28> for alonzo::PlutusScript<VERSION> {
     fn compute_hash(&self) -> Hash<28> {
-        Hasher::<224>::hash_tagged(&self.0, 1)
+        Hasher::<224>::hash_tagged(&self.0, VERSION as u8)
     }
 }
 
@@ -118,31 +118,19 @@ impl OriginalHash<32> for KeepRaw<'_, babbage::Header> {
     }
 }
 
-impl ComputeHash<28> for babbage::PlutusV2Script {
-    fn compute_hash(&self) -> Hash<28> {
-        Hasher::<224>::hash_tagged(&self.0, 2)
-    }
-}
-
-impl ComputeHash<32> for babbage::TransactionBody {
+impl ComputeHash<32> for babbage::TransactionBody<'_> {
     fn compute_hash(&self) -> Hash<32> {
         Hasher::<256>::hash_cbor(self)
     }
 }
 
-impl OriginalHash<32> for KeepRaw<'_, babbage::TransactionBody> {
+impl OriginalHash<32> for KeepRaw<'_, babbage::TransactionBody<'_>> {
     fn original_hash(&self) -> pallas_crypto::hash::Hash<32> {
         Hasher::<256>::hash(self.raw_cbor())
     }
 }
 
-impl OriginalHash<32> for KeepRaw<'_, babbage::MintedTransactionBody<'_>> {
-    fn original_hash(&self) -> pallas_crypto::hash::Hash<32> {
-        Hasher::<256>::hash(self.raw_cbor())
-    }
-}
-
-impl ComputeHash<32> for babbage::DatumOption {
+impl ComputeHash<32> for babbage::DatumOption<'_> {
     fn compute_hash(&self) -> Hash<32> {
         match self {
             babbage::DatumOption::Hash(hash) => *hash,
@@ -153,25 +141,13 @@ impl ComputeHash<32> for babbage::DatumOption {
 
 // conway
 
-impl ComputeHash<28> for conway::PlutusV3Script {
-    fn compute_hash(&self) -> Hash<28> {
-        Hasher::<224>::hash_tagged(&self.0, 3)
-    }
-}
-
-impl ComputeHash<32> for conway::TransactionBody {
+impl ComputeHash<32> for conway::TransactionBody<'_> {
     fn compute_hash(&self) -> Hash<32> {
         Hasher::<256>::hash_cbor(self)
     }
 }
 
-impl OriginalHash<32> for KeepRaw<'_, conway::TransactionBody> {
-    fn original_hash(&self) -> pallas_crypto::hash::Hash<32> {
-        Hasher::<256>::hash(self.raw_cbor())
-    }
-}
-
-impl OriginalHash<32> for KeepRaw<'_, conway::MintedTransactionBody<'_>> {
+impl OriginalHash<32> for KeepRaw<'_, conway::TransactionBody<'_>> {
     fn original_hash(&self) -> pallas_crypto::hash::Hash<32> {
         Hasher::<256>::hash(self.raw_cbor())
     }
@@ -188,17 +164,17 @@ mod tests {
     use crate::{Era, MultiEraTx};
 
     use super::{ComputeHash, OriginalHash};
-    use pallas_codec::utils::Int;
+    use pallas_codec::utils::{Int, MaybeIndefArray};
     use pallas_codec::{minicbor, utils::Bytes};
     use pallas_crypto::hash::Hash;
     use pallas_crypto::key::ed25519::PublicKey;
-    use pallas_primitives::babbage::MintedDatumOption;
+    use pallas_primitives::babbage::DatumOption;
     use pallas_primitives::{alonzo, babbage, byron};
     use std::str::FromStr;
 
     #[test]
     fn byron_transaction_hash_works() {
-        type BlockWrapper<'b> = (u16, byron::MintedBlock<'b>);
+        type BlockWrapper<'b> = (u16, byron::Block<'b>);
 
         // TODO: expand this test to include more test blocks
         let block_str = include_str!("../../test_data/byron1.block");
@@ -217,7 +193,7 @@ mod tests {
 
     #[test]
     fn alonzo_transaction_hash_works() {
-        type BlockWrapper<'b> = (u16, alonzo::MintedBlock<'b>);
+        type BlockWrapper<'b> = (u16, alonzo::Block<'b>);
 
         // TODO: expand this test to include more test blocks
         let block_str = include_str!("../../test_data/alonzo1.block");
@@ -243,7 +219,7 @@ mod tests {
 
     #[test]
     fn babbage_transaction_hash_works() {
-        type BlockWrapper<'b> = (u16, babbage::MintedBlock<'b>);
+        type BlockWrapper<'b> = (u16, babbage::Block<'b>);
 
         // TODO: expand this test to include more test blocks
         let block_idx = 1;
@@ -289,26 +265,26 @@ mod tests {
         let pd = alonzo::PlutusData::Constr(alonzo::Constr::<alonzo::PlutusData> {
             tag: 1280,
             any_constructor: None,
-            fields: vec![
+            fields: MaybeIndefArray::Indef(vec![
                 alonzo::PlutusData::BigInt(alonzo::BigInt::Int(Int::from(4))),
                 alonzo::PlutusData::Constr(alonzo::Constr::<alonzo::PlutusData> {
                     tag: 124,
                     any_constructor: None,
-                    fields: vec![
+                    fields: MaybeIndefArray::Indef(vec![
                         alonzo::PlutusData::BigInt(alonzo::BigInt::Int(Int::from(-4))),
                         alonzo::PlutusData::Constr(alonzo::Constr::<alonzo::PlutusData> {
                             tag: 102,
                             any_constructor: Some(453),
-                            fields: vec![
+                            fields: MaybeIndefArray::Indef(vec![
                                 alonzo::PlutusData::BigInt(alonzo::BigInt::Int(Int::from(2))),
                                 alonzo::PlutusData::BigInt(alonzo::BigInt::Int(Int::from(3434))),
-                            ],
+                            ]),
                         }),
                         alonzo::PlutusData::BigInt(alonzo::BigInt::Int(Int::from(-11828293))),
-                    ],
+                    ]),
                 }),
                 alonzo::PlutusData::BigInt(alonzo::BigInt::Int(Int::from(11828293))),
-            ],
+            ]),
         });
 
         // if you need to try this out in the cardano-cli, uncomment this line to see
@@ -328,7 +304,7 @@ mod tests {
     fn plutus_v1_script_hashes_as_cardano_cli() {
         let bytecode_hex = include_str!("../../test_data/jpgstore.plutus");
         let bytecode = hex::decode(bytecode_hex).unwrap();
-        let script = alonzo::PlutusScript(Bytes::from(bytecode));
+        let script = alonzo::PlutusScript::<1>(Bytes::from(bytecode));
 
         let generated = script.compute_hash().to_string();
 
@@ -344,7 +320,7 @@ mod tests {
     fn plutus_v2_script_hashes_as_cardano_cli() {
         let bytecode_hex = include_str!("../../test_data/v2script.plutus");
         let bytecode = hex::decode(bytecode_hex).unwrap();
-        let script = babbage::PlutusV2Script(Bytes::from(bytecode));
+        let script = babbage::PlutusScript::<2>(Bytes::from(bytecode));
 
         let generated = script.compute_hash().to_string();
 
@@ -405,7 +381,7 @@ mod tests {
         let tx = MultiEraTx::decode_for_era(Era::Babbage, &tx_bytes).unwrap();
 
         for output in tx.outputs() {
-            if let Some(MintedDatumOption::Data(datum)) = output.datum() {
+            if let Some(DatumOption::Data(datum)) = output.datum() {
                 assert_eq!(datum.original_hash().to_string(), expected);
             }
         }

@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::ops::Deref;
 
 use pallas_codec::minicbor;
-use pallas_crypto::hash::{Hash, Hasher};
+use pallas_crypto::hash::Hash;
 use pallas_primitives::{alonzo, babbage, byron};
 
 use crate::{wellknown::GenesisValues, Era, Error, MultiEraHeader, OriginalHash};
@@ -31,7 +31,7 @@ impl<'b> MultiEraHeader<'b> {
         }
     }
 
-    pub fn cbor(&self) -> &'b [u8] {
+    pub fn cbor(&self) -> &[u8] {
         match self {
             MultiEraHeader::EpochBoundary(x) => x.raw_cbor(),
             MultiEraHeader::ShelleyCompatible(x) => x.raw_cbor(),
@@ -118,11 +118,7 @@ impl<'b> MultiEraHeader<'b> {
         match self {
             MultiEraHeader::EpochBoundary(_) => Err(Error::InvalidEra(Era::Byron)),
             MultiEraHeader::ShelleyCompatible(x) => Ok(x.header_body.leader_vrf.0.to_vec()),
-            MultiEraHeader::BabbageCompatible(x) => {
-                let mut leader_tagged_vrf: Vec<u8> = vec![0x4C_u8]; /* "L" */
-                leader_tagged_vrf.extend(&*x.header_body.vrf_result.0);
-                Ok(Hasher::<256>::hash(&leader_tagged_vrf).to_vec())
-            }
+            MultiEraHeader::BabbageCompatible(x) => Ok(x.header_body.leader_vrf_output()),
             MultiEraHeader::Byron(_) => Err(Error::InvalidEra(Era::Byron)),
         }
     }
@@ -131,11 +127,7 @@ impl<'b> MultiEraHeader<'b> {
         match self {
             MultiEraHeader::EpochBoundary(_) => Err(Error::InvalidEra(Era::Byron)),
             MultiEraHeader::ShelleyCompatible(x) => Ok(x.header_body.nonce_vrf.0.to_vec()),
-            MultiEraHeader::BabbageCompatible(x) => {
-                let mut nonce_tagged_vrf: Vec<u8> = vec![0x4E_u8]; /* "N" */
-                nonce_tagged_vrf.extend(&*x.header_body.vrf_result.0);
-                Ok(Hasher::<256>::hash(&nonce_tagged_vrf).to_vec())
-            }
+            MultiEraHeader::BabbageCompatible(x) => Ok(x.header_body.nonce_vrf_output()),
             MultiEraHeader::Byron(_) => Err(Error::InvalidEra(Era::Byron)),
         }
     }
@@ -163,7 +155,7 @@ impl<'b> MultiEraHeader<'b> {
 
     pub fn as_babbage(&self) -> Option<&babbage::Header> {
         match self {
-            MultiEraHeader::BabbageCompatible(x) => Some(x.deref().deref()),
+            MultiEraHeader::BabbageCompatible(x) => Some(x.deref()),
             _ => None,
         }
     }

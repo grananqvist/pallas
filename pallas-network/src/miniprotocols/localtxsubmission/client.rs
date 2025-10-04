@@ -1,15 +1,16 @@
 use std::marker::PhantomData;
 
-use thiserror::Error;
 use tracing::debug;
 
 use pallas_codec::Fragment;
 
-use crate::miniprotocols::localtxsubmission::{EraTx, Message, RejectReason, State};
+use crate::miniprotocols::localtxsubmission::{EraTx, Message, State};
 use crate::multiplexer;
 
+use super::{Error, TxValidationError};
+
 /// Cardano specific instantiation of LocalTxSubmission client.
-pub type Client = GenericClient<EraTx, RejectReason>;
+pub type Client = GenericClient<EraTx, TxValidationError>;
 
 /// A generic Ouroboros client for submitting a generic transaction
 /// to a server, which possibly results in a generic rejection.
@@ -65,7 +66,7 @@ where
     }
 
     /// Returns the current state of the client.
-    fn state(&self) -> &State {
+    pub fn state(&self) -> &State {
         &self.state
     }
 
@@ -155,7 +156,7 @@ where
     /// # Errors
     /// Returns an error if the agency is not ours or if the outbound state is
     /// invalid.
-    async fn send_submit_tx(&mut self, tx: Tx) -> Result<(), Error> {
+    pub async fn send_submit_tx(&mut self, tx: Tx) -> Result<(), Error> {
         let msg = Message::SubmitTx(tx);
         self.send_message(&msg).await?;
         self.state = State::Busy;
@@ -169,7 +170,7 @@ where
     ///
     /// # Errors
     /// Returns an error if the inbound message is invalid.
-    async fn recv_submit_tx_response(&mut self) -> Result<Response<Reject>, Error> {
+    pub async fn recv_submit_tx_response(&mut self) -> Result<Response<Reject>, Error> {
         debug!("waiting for SubmitTx response");
 
         match self.recv_message().await? {
@@ -186,25 +187,7 @@ where
     }
 }
 
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("attempted to receive message while agency is ours")]
-    AgencyIsOurs,
-
-    #[error("attempted to send message while agency is theirs")]
-    AgencyIsTheirs,
-
-    #[error("inbound message is not valid for current state")]
-    InvalidInbound,
-
-    #[error("outbound message is not valid for current state")]
-    InvalidOutbound,
-
-    #[error("error while sending or receiving data through the channel")]
-    ChannelError(multiplexer::Error),
-}
-
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Response<Reject> {
     Accepted,
     Rejected(Reject),

@@ -12,56 +12,56 @@ type BlockWrapper<T> = (u16, T);
 
 impl<'b> MultiEraBlock<'b> {
     pub fn decode_epoch_boundary(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<byron::MintedEbBlock> =
+        let (_, block): BlockWrapper<byron::EbBlock> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::EpochBoundary(Box::new(block)))
     }
 
     pub fn decode_byron(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<byron::MintedBlock> =
+        let (_, block): BlockWrapper<byron::Block> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::Byron(Box::new(block)))
     }
 
     pub fn decode_shelley(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<alonzo::MintedBlock> =
+        let (_, block): BlockWrapper<alonzo::Block> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::AlonzoCompatible(Box::new(block), Era::Shelley))
     }
 
     pub fn decode_allegra(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<alonzo::MintedBlock> =
+        let (_, block): BlockWrapper<alonzo::Block> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::AlonzoCompatible(Box::new(block), Era::Allegra))
     }
 
     pub fn decode_mary(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<alonzo::MintedBlock> =
+        let (_, block): BlockWrapper<alonzo::Block> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::AlonzoCompatible(Box::new(block), Era::Mary))
     }
 
     pub fn decode_alonzo(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<alonzo::MintedBlock> =
+        let (_, block): BlockWrapper<alonzo::Block> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::AlonzoCompatible(Box::new(block), Era::Alonzo))
     }
 
     pub fn decode_babbage(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<babbage::MintedBlock> =
+        let (_, block): BlockWrapper<babbage::Block> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::Babbage(Box::new(block)))
     }
 
     pub fn decode_conway(cbor: &'b [u8]) -> Result<Self, Error> {
-        let (_, block): BlockWrapper<conway::MintedBlock> =
+        let (_, block): BlockWrapper<conway::Block> =
             minicbor::decode(cbor).map_err(Error::invalid_cbor)?;
 
         Ok(Self::Conway(Box::new(block)))
@@ -123,7 +123,7 @@ impl<'b> MultiEraBlock<'b> {
     }
 
     /// Builds a vec with the Txs of the block
-    pub fn txs(&self) -> Vec<MultiEraTx> {
+    pub fn txs(&self) -> Vec<MultiEraTx<'_>> {
         match self {
             MultiEraBlock::AlonzoCompatible(x, era) => support::clone_alonzo_txs(x)
                 .into_iter()
@@ -179,13 +179,11 @@ impl<'b> MultiEraBlock<'b> {
     }
 
     /// Returns any block-level param update proposals (byron-specific)
-    pub fn update(&self) -> Option<MultiEraUpdate> {
+    pub fn update(&self) -> Option<MultiEraUpdate<'_>> {
         match self {
             MultiEraBlock::Byron(x) => {
                 if let Some(up) = x.body.upd_payload.proposal.deref() {
-                    // TODO: this might be horribly wrong, I'm assuming that the activation epoch
-                    // for a Byron upgrade proposal is always current epoch + 1.
-                    let epoch = x.header.consensus_data.0.epoch + 1;
+                    let epoch = x.header.consensus_data.0.epoch;
                     Some(MultiEraUpdate::Byron(
                         epoch,
                         Box::new(Cow::Owned(up.clone())),
@@ -198,28 +196,28 @@ impl<'b> MultiEraBlock<'b> {
         }
     }
 
-    pub fn as_alonzo(&self) -> Option<&alonzo::MintedBlock> {
+    pub fn as_alonzo(&self) -> Option<&alonzo::Block<'_>> {
         match self {
             MultiEraBlock::AlonzoCompatible(x, _) => Some(x),
             _ => None,
         }
     }
 
-    pub fn as_babbage(&self) -> Option<&babbage::MintedBlock> {
+    pub fn as_babbage(&self) -> Option<&babbage::Block<'_>> {
         match self {
             MultiEraBlock::Babbage(x) => Some(x),
             _ => None,
         }
     }
 
-    pub fn as_byron(&self) -> Option<&byron::MintedBlock> {
+    pub fn as_byron(&self) -> Option<&byron::Block<'_>> {
         match self {
             MultiEraBlock::Byron(x) => Some(x),
             _ => None,
         }
     }
 
-    pub fn as_conway(&self) -> Option<&conway::MintedBlock> {
+    pub fn as_conway(&self) -> Option<&conway::Block<'_>> {
         match self {
             MultiEraBlock::Conway(x) => Some(x),
             _ => None,

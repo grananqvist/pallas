@@ -33,7 +33,7 @@ impl<'de> Deserialize<'de> for Bytes32 {
 
 struct Bytes32Visitor;
 
-impl<'de> Visitor<'de> for Bytes32Visitor {
+impl Visitor<'_> for Bytes32Visitor {
     type Value = Bytes32;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -73,7 +73,7 @@ impl<'de> Deserialize<'de> for Hash28 {
 
 struct Hash28Visitor;
 
-impl<'de> Visitor<'de> for Hash28Visitor {
+impl Visitor<'_> for Hash28Visitor {
     type Value = Hash28;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -113,7 +113,7 @@ impl<'de> Deserialize<'de> for Bytes {
 
 struct BytesVisitor;
 
-impl<'de> Visitor<'de> for BytesVisitor {
+impl Visitor<'_> for BytesVisitor {
     type Value = Bytes;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -265,7 +265,7 @@ impl<'de> Deserialize<'de> for RedeemerPurpose {
 
 struct RedeemerPurposeVisitor;
 
-impl<'de> Visitor<'de> for RedeemerPurposeVisitor {
+impl Visitor<'_> for RedeemerPurposeVisitor {
     type Value = RedeemerPurpose;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -333,7 +333,7 @@ impl<'de> Deserialize<'de> for Address {
 
 struct AddressVisitor;
 
-impl<'de> Visitor<'de> for AddressVisitor {
+impl Visitor<'_> for AddressVisitor {
     type Value = Address;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -370,7 +370,7 @@ impl<'de> Deserialize<'de> for Bytes64 {
 
 struct Bytes64Visitor;
 
-impl<'de> Visitor<'de> for Bytes64Visitor {
+impl Visitor<'_> for Bytes64Visitor {
     type Value = Bytes64;
 
     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
@@ -395,7 +395,7 @@ mod tests {
     use std::str::FromStr;
 
     use pallas_addresses::Address as PallasAddress;
-    use pallas_primitives::{babbage::PlutusData, Fragment};
+    use pallas_primitives::{babbage::PlutusData, Fragment, MaybeIndefArray};
 
     use crate::transaction::{model::*, Bytes64, DatumBytes, DatumHash, Hash28, TransactionStatus};
 
@@ -473,12 +473,13 @@ mod tests {
             ),
             datums: Some(datums),
             redeemers: Some(Redeemers::from_map(vec![
-                (RedeemerPurpose::Spend(Input { tx_hash: Bytes32([4; 32]), txo_index: 1 }), (Bytes(PlutusData::Array(vec![]).encode_fragment().unwrap()), Some(ExUnits { mem: 1337, steps: 7331 }))),
-                (RedeemerPurpose::Mint(Hash28([5; 28])), (Bytes(PlutusData::Array(vec![]).encode_fragment().unwrap()), None)),
+                (RedeemerPurpose::Spend(Input { tx_hash: Bytes32([4; 32]), txo_index: 1 }), (Bytes(PlutusData::Array(MaybeIndefArray::Def(vec![])).encode_fragment().unwrap()), Some(ExUnits { mem: 1337, steps: 7331 }))),
+                (RedeemerPurpose::Mint(Hash28([5; 28])), (Bytes(PlutusData::Array(MaybeIndefArray::Def(vec![])).encode_fragment().unwrap()), None)),
             ].into_iter().collect::<HashMap<_, _>>())),
             signature_amount_override: Some(5),
             change_address: Some(Address(PallasAddress::from_str("addr1g9ekml92qyvzrjmawxkh64r2w5xr6mg9ngfmxh2khsmdrcudevsft64mf887333adamant").unwrap())),
             script_data_hash: Some(Bytes32([0; 32])),
+            language_view: Some(pallas_primitives::conway::LanguageView(1, vec![1, 2, 3])),
         };
 
         let serialised_tx = serde_json::to_string(&tx).unwrap();

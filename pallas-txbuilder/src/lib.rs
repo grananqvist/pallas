@@ -1,9 +1,10 @@
-mod babbage;
+mod conway;
 mod transaction;
 
-pub use babbage::BuildBabbage;
-pub use transaction::model::{
-    BuiltTransaction, ExUnits, Input, Output, ScriptKind, StagingTransaction,
+pub use conway::BuildConway;
+pub use transaction::{
+    model::{BuiltTransaction, ExUnits, Input, Output, ScriptKind, StagingTransaction},
+    Bytes, Bytes32,
 };
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
@@ -33,4 +34,7 @@ pub enum TxBuilderError {
     /// Asset name is too long, it must be 32 bytes or less
     #[error("Asset name must be 32 bytes or less")]
     AssetNameTooLong,
+    /// Unsupported era
+    #[error("Unsupported era")]
+    UnsupportedEra,
 }

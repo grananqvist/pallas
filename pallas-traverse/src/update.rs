@@ -2,7 +2,7 @@ use pallas_codec::minicbor;
 use paste::paste;
 use std::{borrow::Cow, ops::Deref};
 
-use pallas_primitives::{alonzo, babbage, byron};
+use pallas_primitives::{alonzo, babbage, byron, conway};
 
 macro_rules! param_boilerplate {
     ($name:ident: $type_:ty, [$($variant:tt)*]) => {
@@ -13,8 +13,9 @@ macro_rules! param_boilerplate {
                     $(
                         MultiEraUpdate::$variant(x) => x
                             .proposed_protocol_parameter_updates
-                            .first()
-                            .and_then(|x| x.1.$name.clone()),
+                            .values()
+                            .next()
+                            .and_then(|x| x.$name.clone()),
                     )*
 
                     _ => None,
@@ -29,8 +30,8 @@ macro_rules! param_boilerplate {
                     $(
                         MultiEraUpdate::$variant(x) => x
                             .proposed_protocol_parameter_updates
-                            .iter()
-                            .map(|x| x.1.$name.clone())
+                            .values()
+                            .map(|x| x.$name.clone())
                             .flatten()
                             .collect::<Vec<_>>(),
                     )*
@@ -47,13 +48,17 @@ pub type UnitInterval = alonzo::UnitInterval;
 pub type Nonce = alonzo::Nonce;
 pub type ExUnitPrices = alonzo::ExUnitPrices;
 pub type ExUnits = alonzo::ExUnits;
-pub type CostMdls = alonzo::CostMdls;
+pub type AlonzoCostModels = alonzo::CostModels;
+pub type BabbageCostModels = babbage::CostModels;
+pub type ConwayCostModels = conway::CostModels;
 pub type ProtocolVersion = alonzo::ProtocolVersion;
+pub type PoolVotingThresholds = conway::PoolVotingThresholds;
+pub type DRepVotingThresholds = conway::DRepVotingThresholds;
 
 use crate::{Era, MultiEraUpdate};
 
 impl<'b> MultiEraUpdate<'b> {
-    pub fn decode_for_era(era: Era, cbor: &'b [u8]) -> Result<Self, minicbor::decode::Error> {
+    pub fn decode_for_era(era: Era, cbor: &[u8]) -> Result<Self, minicbor::decode::Error> {
         match era {
             Era::Byron => {
                 let (epoch, up) = minicbor::decode(cbor)?;
@@ -70,13 +75,18 @@ impl<'b> MultiEraUpdate<'b> {
                 let up = Box::new(Cow::Owned(up));
                 Ok(MultiEraUpdate::Babbage(up))
             }
-            _ => unimplemented!("unimplemented era"),
+            Era::Conway => {
+                let up = minicbor::decode(cbor)?;
+                let up = Box::new(Cow::Owned(up));
+                Ok(MultiEraUpdate::Conway(up))
+            }
         }
     }
 
     pub fn encode(&self) -> Vec<u8> {
         // to_vec is infallible
         match self {
+            MultiEraUpdate::Conway(x) => minicbor::to_vec(x).unwrap(),
             MultiEraUpdate::AlonzoCompatible(x) => minicbor::to_vec(x).unwrap(),
             MultiEraUpdate::Babbage(x) => minicbor::to_vec(x).unwrap(),
             MultiEraUpdate::Byron(a, b) => minicbor::to_vec((a, b)).unwrap(),
@@ -93,6 +103,10 @@ impl<'b> MultiEraUpdate<'b> {
 
     pub fn from_babbage(update: &'b babbage::Update) -> Self {
         Self::Babbage(Box::new(Cow::Borrowed(update)))
+    }
+
+    pub fn from_conway(update: &'b conway::Update) -> Self {
+        Self::Conway(Box::new(Cow::Borrowed(update)))
     }
 
     pub fn as_byron(&self) -> Option<&byron::UpProp> {
@@ -121,6 +135,7 @@ impl<'b> MultiEraUpdate<'b> {
             MultiEraUpdate::Byron(x, _) => *x,
             MultiEraUpdate::AlonzoCompatible(x) => x.epoch,
             MultiEraUpdate::Babbage(x) => x.epoch,
+            MultiEraUpdate::Conway(x) => x.epoch,
         }
     }
 
@@ -146,6 +161,47 @@ impl<'b> MultiEraUpdate<'b> {
             _ => None,
         }
     }
+
+    pub fn alonzo_first_proposed_cost_models_for_script_languages(
+        &self,
+    ) -> Option<AlonzoCostModels> {
+        match self {
+            MultiEraUpdate::AlonzoCompatible(x) => x
+                .proposed_protocol_parameter_updates
+                .values()
+                .next()
+                .and_then(|x| x.cost_models_for_script_languages.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn babbage_first_proposed_cost_models_for_script_languages(
+        &self,
+    ) -> Option<BabbageCostModels> {
+        match self {
+            MultiEraUpdate::Babbage(x) => x
+                .proposed_protocol_parameter_updates
+                .values()
+                .next()
+                .and_then(|x| x.cost_models_for_script_languages.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn conway_first_proposed_cost_models_for_script_languages(
+        &self,
+    ) -> Option<ConwayCostModels> {
+        match self {
+            MultiEraUpdate::Conway(x) => x
+                .proposed_protocol_parameter_updates
+                .values()
+                .next()
+                .and_then(|x| x.cost_models_for_script_languages.clone()),
+            _ => None,
+        }
+    }
+
+    // remaining params are mostly boilerplate code, so we can just generate them
 
     param_boilerplate!(minfee_a: u32, [AlonzoCompatible Babbage]);
 
@@ -181,9 +237,6 @@ impl<'b> MultiEraUpdate<'b> {
 
     param_boilerplate!(ada_per_utxo_byte: u64, [AlonzoCompatible Babbage]);
 
-    //param_boilerplate!(cost_models_for_script_languages: CostMdls,
-    // [AlonzoCompatible Babbage]);
-
     param_boilerplate!(execution_costs: ExUnitPrices, [AlonzoCompatible Babbage]);
 
     param_boilerplate!(max_tx_ex_units: ExUnits, [AlonzoCompatible Babbage]);
@@ -195,4 +248,22 @@ impl<'b> MultiEraUpdate<'b> {
     param_boilerplate!(collateral_percentage: u32, [AlonzoCompatible Babbage]);
 
     param_boilerplate!(max_collateral_inputs: u32, [AlonzoCompatible Babbage]);
+
+    param_boilerplate!(pool_voting_thresholds: PoolVotingThresholds, [Conway]);
+
+    param_boilerplate!(drep_voting_thresholds: DRepVotingThresholds, [Conway]);
+
+    param_boilerplate!(min_committee_size: u64, [Conway]);
+
+    param_boilerplate!(committee_term_limit: u64, [Conway]);
+
+    param_boilerplate!(governance_action_validity_period: u64, [Conway]);
+
+    param_boilerplate!(governance_action_deposit: u64, [Conway]);
+
+    param_boilerplate!(drep_deposit: u64, [Conway]);
+
+    param_boilerplate!(drep_inactivity_period: u64, [Conway]);
+
+    param_boilerplate!(minfee_refscript_cost_per_byte: UnitInterval, [Conway]);
 }

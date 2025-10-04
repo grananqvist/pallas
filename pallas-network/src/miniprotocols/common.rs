@@ -51,6 +51,9 @@ pub const PROTOCOL_N2N_TX_SUBMISSION: u16 = 4;
 /// Protocol channel number for node-to-node Keep-alive
 pub const PROTOCOL_N2N_KEEP_ALIVE: u16 = 8;
 
+/// Protocol channel number for node-to-node Peer-sharing
+pub const PROTOCOL_N2N_PEER_SHARING: u16 = 10;
+
 /// Protocol channel number for node-to-client handshakes
 pub const PROTOCOL_N2C_HANDSHAKE: u16 = 0;
 
@@ -65,6 +68,16 @@ pub const PROTOCOL_N2C_STATE_QUERY: u16 = 7;
 
 // Protocol channel number for node-to-client mempool monitor
 pub const PROTOCOL_N2C_TX_MONITOR: u16 = 9;
+
+/// Protocol channel number for node-to-client local message submission
+/// This protocol is available only on the DMQ node.
+// TODO: use the final mini-protocol number once available
+pub const PROTOCOL_N2C_MSG_SUBMISSION: u16 = 1;
+
+/// Protocol channel number for node-to-client local message notification
+/// This protocol is available only on the DMQ node.
+// TODO: use the final mini-protocol number once available
+pub const PROTOCOL_N2C_MSG_NOTIFICATION: u16 = 2;
 
 /// A point within a chain
 #[derive(Clone, Eq, PartialEq, Hash, Ord)]

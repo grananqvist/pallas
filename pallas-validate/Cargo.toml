@@ -1,0 +1,31 @@
+[package]
+name = "pallas-validate"
+description = "Utilities for validating transactions"
+version = "1.0.0-alpha.2"
+edition = "2021"
+repository = "https://github.com/txpipe/pallas"
+homepage = "https://github.com/txpipe/pallas"
+documentation = "https://docs.rs/pallas-validate"
+license = "Apache-2.0"
+readme = "README.md"
+authors = ["TxPipe <hello@txpipe.io>"]
+
+[dependencies]
+pallas-addresses = { version = "=1.0.0-alpha.2", path = "../pallas-addresses" }
+pallas-codec = { version = "=1.0.0-alpha.2", path = "../pallas-codec" }
+pallas-crypto = { version = "=1.0.0-alpha.2", path = "../pallas-crypto" }
+pallas-primitives = { version = "=1.0.0-alpha.2", path = "../pallas-primitives" }
+pallas-traverse = { version = "=1.0.0-alpha.2", path = "../pallas-traverse" }
+hex = "0.4"
+chrono = "0.4.39"
+thiserror = "1.0.49"
+serde = { version = "1.0.136", features = ["derive"] }
+itertools = "0.14.0"
+tracing = "0.1.41"
+
+# phase2 dependencies
+uplc-turbo = { git = "https://github.com/txpipe/uplc-turbo.git", rev = "bd174b3", optional = true }
+# uplc-turbo = { path = "../../../pragma-org/uplc/crates/uplc", optional = true }
+
+[features]
+phase2 = ["uplc-turbo"]

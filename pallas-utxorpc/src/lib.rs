@@ -3,7 +3,7 @@ use std::{collections::HashMap, ops::Deref};
 use pallas_codec::utils::KeyValuePairs;
 use pallas_crypto::hash::Hash;
 use pallas_primitives::{alonzo, babbage, conway};
-use pallas_traverse as trv;
+use pallas_traverse::{self as trv};
 
 use prost_types::FieldMask;
 use trv::OriginalHash;
@@ -21,9 +21,18 @@ pub type TxoRef = (TxHash, TxoIndex);
 pub type Cbor = Vec<u8>;
 pub type EraCbor = (trv::Era, Cbor);
 pub type UtxoMap = HashMap<TxoRef, EraCbor>;
+pub type DatumMap = HashMap<Hash<32>, alonzo::PlutusData>;
+
+fn rational_number_to_u5c(value: pallas_primitives::RationalNumber) -> u5c::RationalNumber {
+    u5c::RationalNumber {
+        numerator: value.numerator as i32,
+        denominator: value.denominator as u32,
+    }
+}
 
 pub trait LedgerContext: Clone {
     fn get_utxos(&self, refs: &[TxoRef]) -> Option<UtxoMap>;
+    fn get_slot_timestamp(&self, slot: u64) -> Option<u64>;
 }
 
 #[derive(Default, Clone)]
@@ -65,6 +74,12 @@ impl<C: LedgerContext> Mapper<C> {
         u5c::Redeemer {
             purpose: self.map_purpose(&x.tag()).into(),
             payload: self.map_plutus_datum(x.data()).into(),
+            index: x.index(),
+            ex_units: Some(u5c::ExUnits {
+                steps: x.ex_units().steps,
+                memory: x.ex_units().mem,
+            }),
+            original_cbor: x.encode().into(),
         }
     }
 
@@ -72,6 +87,7 @@ impl<C: LedgerContext> Mapper<C> {
         &self,
         resolved: &Option<UtxoMap>,
         input: &trv::MultiEraInput,
+        tx: &trv::MultiEraTx,
     ) -> Option<u5c::TxOutput> {
         let as_txref = (*input.hash(), input.index() as u32);
 
@@ -80,7 +96,7 @@ impl<C: LedgerContext> Mapper<C> {
             .and_then(|x| x.get(&as_txref))
             .and_then(|(era, cbor)| {
                 let o = trv::MultiEraOutput::decode(*era, cbor.as_slice()).ok()?;
-                Some(self.map_tx_output(&o))
+                Some(self.map_tx_output(&o, Some(tx)))
             })
     }
 
@@ -95,7 +111,7 @@ impl<C: LedgerContext> Mapper<C> {
         u5c::TxInput {
             tx_hash: input.hash().to_vec().into(),
             output_index: input.index() as u32,
-            as_output: self.decode_resolved_utxo(resolved, input),
+            as_output: self.decode_resolved_utxo(resolved, input, tx),
             redeemer: tx.find_spend_redeemer(order).map(|x| self.map_redeemer(&x)),
         }
     }
@@ -104,11 +120,12 @@ impl<C: LedgerContext> Mapper<C> {
         &self,
         input: &trv::MultiEraInput,
         resolved: &Option<UtxoMap>,
+        tx: &trv::MultiEraTx,
     ) -> u5c::TxInput {
         u5c::TxInput {
             tx_hash: input.hash().to_vec().into(),
             output_index: input.index() as u32,
-            as_output: self.decode_resolved_utxo(resolved, input),
+            as_output: self.decode_resolved_utxo(resolved, input, tx),
             redeemer: None,
         }
     }
@@ -117,65 +134,77 @@ impl<C: LedgerContext> Mapper<C> {
         &self,
         input: &trv::MultiEraInput,
         resolved: &Option<UtxoMap>,
+        tx: &trv::MultiEraTx,
     ) -> u5c::TxInput {
         u5c::TxInput {
             tx_hash: input.hash().to_vec().into(),
             output_index: input.index() as u32,
-            as_output: self.decode_resolved_utxo(resolved, input),
+            as_output: self.decode_resolved_utxo(resolved, input, tx),
             redeemer: None,
         }
     }
 
-    pub fn map_tx_datum(&self, x: &trv::MultiEraOutput) -> u5c::Datum {
+    pub fn map_tx_datum(
+        &self,
+        x: &trv::MultiEraOutput,
+        tx: Option<&trv::MultiEraTx>,
+    ) -> u5c::Datum {
         u5c::Datum {
             hash: match x.datum() {
-                Some(babbage::PseudoDatumOption::Data(x)) => x.original_hash().to_vec().into(),
-                Some(babbage::PseudoDatumOption::Hash(x)) => x.to_vec().into(),
+                Some(babbage::DatumOption::Data(x)) => x.original_hash().to_vec().into(),
+                Some(babbage::DatumOption::Hash(x)) => x.to_vec().into(),
                 _ => vec![].into(),
             },
             payload: match x.datum() {
-                Some(babbage::PseudoDatumOption::Data(x)) => self.map_plutus_datum(&x.0).into(),
+                Some(babbage::DatumOption::Data(x)) => self.map_plutus_datum(&x.0).into(),
+                Some(babbage::DatumOption::Hash(x)) => tx
+                    .and_then(|tx| tx.find_plutus_data(&x))
+                    .map(|d| self.map_plutus_datum(d)),
                 _ => None,
             },
             original_cbor: match x.datum() {
-                Some(babbage::PseudoDatumOption::Data(x)) => x.raw_cbor().to_vec().into(),
+                Some(babbage::DatumOption::Data(x)) => x.raw_cbor().to_vec().into(),
                 _ => vec![].into(),
             },
         }
     }
 
-    pub fn map_tx_output(&self, x: &trv::MultiEraOutput) -> u5c::TxOutput {
+    pub fn map_any_script(&self, x: &conway::ScriptRef) -> u5c::Script {
+        match x {
+            conway::ScriptRef::NativeScript(x) => u5c::Script {
+                script: u5c::script::Script::Native(Self::map_native_script(x)).into(),
+            },
+            conway::ScriptRef::PlutusV1Script(x) => u5c::Script {
+                script: u5c::script::Script::PlutusV1(x.0.to_vec().into()).into(),
+            },
+            conway::ScriptRef::PlutusV2Script(x) => u5c::Script {
+                script: u5c::script::Script::PlutusV2(x.0.to_vec().into()).into(),
+            },
+            conway::ScriptRef::PlutusV3Script(x) => u5c::Script {
+                script: u5c::script::Script::PlutusV3(x.0.to_vec().into()).into(),
+            },
+        }
+    }
+
+    pub fn map_tx_output(
+        &self,
+        x: &trv::MultiEraOutput,
+        tx: Option<&trv::MultiEraTx>,
+    ) -> u5c::TxOutput {
         u5c::TxOutput {
             address: x.address().map(|a| a.to_vec()).unwrap_or_default().into(),
-            coin: x.lovelace_amount(),
+            coin: x.value().coin(),
             // TODO: this is wrong, we're crating a new item for each asset even if they share
             // the same policy id. We need to adjust Pallas' interface to make this mapping more
             // ergonomic.
             assets: x
-                .non_ada_assets()
+                .value()
+                .assets()
                 .iter()
                 .map(|x| self.map_policy_assets(x))
                 .collect(),
-            datum: self.map_tx_datum(x).into(),
-            script: match x.script_ref() {
-                Some(conway::PseudoScript::NativeScript(x)) => u5c::Script {
-                    script: u5c::script::Script::Native(Self::map_native_script(&x)).into(), /*  */
-                }
-                .into(),
-                Some(conway::PseudoScript::PlutusV1Script(x)) => u5c::Script {
-                    script: u5c::script::Script::PlutusV1(x.0.to_vec().into()).into(),
-                }
-                .into(),
-                Some(conway::PseudoScript::PlutusV2Script(x)) => u5c::Script {
-                    script: u5c::script::Script::PlutusV2(x.0.to_vec().into()).into(),
-                }
-                .into(),
-                Some(conway::PseudoScript::PlutusV3Script(x)) => u5c::Script {
-                    script: u5c::script::Script::PlutusV3(x.0.to_vec().into()).into(),
-                }
-                .into(),
-                None => None,
-            },
+            datum: self.map_tx_datum(x, tx).into(),
+            script: x.script_ref().map(|x| self.map_any_script(&x)),
         }
     }
 
@@ -184,7 +213,7 @@ impl<C: LedgerContext> Mapper<C> {
             babbage::StakeCredential::AddrKeyhash(x) => {
                 u5c::stake_credential::StakeCredential::AddrKeyHash(x.to_vec().into())
             }
-            babbage::StakeCredential::Scripthash(x) => {
+            babbage::StakeCredential::ScriptHash(x) => {
                 u5c::stake_credential::StakeCredential::ScriptHash(x.to_vec().into())
             }
         };
@@ -198,16 +227,16 @@ impl<C: LedgerContext> Mapper<C> {
         match x {
             babbage::Relay::SingleHostAddr(port, v4, v6) => u5c::Relay {
                 // ip_v4: v4.map(|x| x.to_vec().into()).into().unwrap_or_default(),
-                ip_v4: Option::from(v4.clone().map(|x| x.to_vec().into())).unwrap_or_default(),
-                ip_v6: Option::from(v6.clone().map(|x| x.to_vec().into())).unwrap_or_default(),
+                ip_v4: v4.clone().map(|x| x.to_vec().into()).unwrap_or_default(),
+                ip_v6: v6.clone().map(|x| x.to_vec().into()).unwrap_or_default(),
                 dns_name: String::default(),
-                port: Option::from(port.clone()).unwrap_or_default(),
+                port: (*port).unwrap_or_default(),
             },
             babbage::Relay::SingleHostName(port, name) => u5c::Relay {
                 ip_v4: Default::default(),
                 ip_v6: Default::default(),
                 dns_name: name.clone(),
-                port: Option::from(port.clone()).unwrap_or_default(),
+                port: (*port).unwrap_or_default(),
             },
             babbage::Relay::MultiHostName(name) => u5c::Relay {
                 ip_v4: Default::default(),
@@ -387,6 +416,125 @@ impl<C: LedgerContext> Mapper<C> {
         }
     }
 
+    pub fn map_gov_action_id(
+        &self,
+        x: &Option<conway::GovActionId>,
+    ) -> Option<u5c::GovernanceActionId> {
+        x.as_ref().map(|inner| u5c::GovernanceActionId {
+            transaction_id: inner.transaction_id.to_vec().into(),
+            governance_action_index: inner.action_index,
+        })
+    }
+
+    pub fn map_conway_gov_action(&self, x: &conway::GovAction) -> u5c::GovernanceAction {
+        let inner = match x {
+            conway::GovAction::ParameterChange(gov_id, params, script) => {
+                u5c::governance_action::GovernanceAction::ParameterChangeAction(
+                    u5c::ParameterChangeAction {
+                        gov_action_id: self.map_gov_action_id(gov_id),
+                        protocol_param_update: Some(self.map_conway_pparams_update(params)),
+                        policy_hash: match script {
+                            Some(x) => x.to_vec().into(),
+                            _ => Default::default(),
+                        },
+                    },
+                )
+            }
+            conway::GovAction::HardForkInitiation(gov_id, version) => {
+                u5c::governance_action::GovernanceAction::HardForkInitiationAction(
+                    u5c::HardForkInitiationAction {
+                        gov_action_id: self.map_gov_action_id(gov_id),
+                        protocol_version: Some(u5c::ProtocolVersion {
+                            major: version.0 as u32,
+                            minor: version.1 as u32,
+                        }),
+                    },
+                )
+            }
+            conway::GovAction::TreasuryWithdrawals(withdrawals, script) => {
+                u5c::governance_action::GovernanceAction::TreasuryWithdrawalsAction(
+                    u5c::TreasuryWithdrawalsAction {
+                        withdrawals: withdrawals
+                            .iter()
+                            .map(|(k, v)| u5c::WithdrawalAmount {
+                                reward_account: k.to_vec().into(),
+                                coin: *v,
+                            })
+                            .collect(),
+                        policy_hash: match script {
+                            Some(x) => x.to_vec().into(),
+                            _ => Default::default(),
+                        },
+                    },
+                )
+            }
+            conway::GovAction::NoConfidence(gov_id) => {
+                u5c::governance_action::GovernanceAction::NoConfidenceAction(
+                    u5c::NoConfidenceAction {
+                        gov_action_id: self.map_gov_action_id(gov_id),
+                    },
+                )
+            }
+            conway::GovAction::UpdateCommittee(gov_id, remove, add, threshold) => {
+                u5c::governance_action::GovernanceAction::UpdateCommitteeAction(
+                    u5c::UpdateCommitteeAction {
+                        gov_action_id: self.map_gov_action_id(gov_id),
+                        remove_committee_credentials: remove
+                            .iter()
+                            .map(|x| self.map_stake_credential(x))
+                            .collect(),
+                        new_committee_credentials: add
+                            .iter()
+                            .map(|(cred, epoch)| u5c::NewCommitteeCredentials {
+                                committee_cold_credential: Some(self.map_stake_credential(cred)),
+                                expires_epoch: *epoch as u32,
+                            })
+                            .collect(),
+                        new_committee_threshold: Some(rational_number_to_u5c(threshold.clone())),
+                    },
+                )
+            }
+            conway::GovAction::NewConstitution(gov_id, constitution) => {
+                u5c::governance_action::GovernanceAction::NewConstitutionAction(
+                    u5c::NewConstitutionAction {
+                        gov_action_id: self.map_gov_action_id(gov_id),
+                        constitution: Some(u5c::Constitution {
+                            anchor: Some(u5c::Anchor {
+                                url: constitution.anchor.url.clone(),
+                                content_hash: constitution.anchor.content_hash.to_vec().into(),
+                            }),
+                            hash: match constitution.guardrail_script {
+                                Some(x) => x.to_vec().into(),
+                                _ => Default::default(),
+                            },
+                        }),
+                    },
+                )
+            }
+            conway::GovAction::Information => {
+                u5c::governance_action::GovernanceAction::InfoAction(6) // The 6 is just a placeholder, we don't need to use it
+            }
+        };
+
+        u5c::GovernanceAction {
+            governance_action: Some(inner),
+        }
+    }
+
+    pub fn map_gov_proposal(&self, x: &trv::MultiEraProposal) -> u5c::GovernanceActionProposal {
+        u5c::GovernanceActionProposal {
+            deposit: x.deposit(),
+            reward_account: x.reward_account().to_vec().into(),
+            gov_action: x
+                .as_conway()
+                .map(|x| self.map_conway_gov_action(&x.gov_action)),
+            anchor: Some(u5c::Anchor {
+                url: x.anchor().url.clone(),
+                content_hash: x.anchor().content_hash.to_vec().into(),
+            }),
+        }
+    }
+
     pub fn map_metadatum(x: &alonzo::Metadatum) -> u5c::Metadatum {
         let inner = match x {
             babbage::Metadatum::Int(x) => u5c::metadatum::Metadatum::Int(i128::from(x.0) as i64),
@@ -475,12 +623,21 @@ impl<C: LedgerContext> Mapper<C> {
                 .enumerate()
                 .map(|(order, i)| self.map_tx_input(i, tx, order as u32, &resolved))
                 .collect(),
-            outputs: tx.outputs().iter().map(|x| self.map_tx_output(x)).collect(),
+            outputs: tx
+                .outputs()
+                .iter()
+                .map(|x| self.map_tx_output(x, Some(tx)))
+                .collect(),
             certificates: tx
                 .certs()
                 .iter()
                 .enumerate()
                 .filter_map(|(order, x)| self.map_cert(x, tx, order as u32))
+                .collect(),
+            proposals: tx
+                .gov_proposals()
+                .iter()
+                .map(|x| self.map_gov_proposal(x))
                 .collect(),
             withdrawals: tx
                 .withdrawals_sorted_set()
@@ -505,7 +662,7 @@ impl<C: LedgerContext> Mapper<C> {
             reference_inputs: tx
                 .reference_inputs()
                 .iter()
-                .map(|x| self.map_tx_reference_input(x, &resolved))
+                .map(|x| self.map_tx_reference_input(x, &resolved, tx))
                 .collect(),
             witnesses: u5c::WitnessSet {
                 vkeywitness: tx
@@ -525,9 +682,11 @@ impl<C: LedgerContext> Mapper<C> {
                 collateral: tx
                     .collateral()
                     .iter()
-                    .map(|x| self.map_tx_collateral(x, &resolved))
+                    .map(|x| self.map_tx_collateral(x, &resolved, tx))
                     .collect(),
-                collateral_return: tx.collateral_return().map(|x| self.map_tx_output(&x)),
+                collateral_return: tx
+                    .collateral_return()
+                    .map(|x| self.map_tx_output(&x, Some(tx))),
                 total_collateral: tx.total_collateral().unwrap_or_default(),
             }
             .into(),
@@ -563,6 +722,11 @@ impl<C: LedgerContext> Mapper<C> {
                 tx: block.txs().iter().map(|x| self.map_tx(x)).collect(),
             }
             .into(),
+            timestamp: self
+                .ledger
+                .as_ref()
+                .and_then(|ledger| ledger.get_slot_timestamp(block.slot()))
+                .unwrap_or(0),
         }
     }
 
@@ -582,6 +746,10 @@ mod tests {
 
     impl LedgerContext for NoLedger {
         fn get_utxos(&self, _refs: &[TxoRef]) -> Option<UtxoMap> {
+            None
+        }
+
+        fn get_slot_timestamp(&self, _slot: u64) -> Option<u64> {
             None
         }
     }
@@ -606,7 +774,7 @@ mod tests {
             // )
             // .unwrap();
 
-            let expected: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+            let expected: serde_json::Value = serde_json::from_str(json_str).unwrap();
 
             assert_eq!(expected, current)
         }
